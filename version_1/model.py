@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from transformers import BertModel
+from transformers import BertModel, logging
 from torchcrf import CRF
+
+logging.set_verbosity_error()
 
 
 # Bi LSTM
@@ -54,7 +57,7 @@ class MyBert(nn.Module):
 
         # bert + 冻结参数
         # self.bert = BertModel.from_pretrained("../bert-base-uncased/")
-        self.bert = BertModel.from_pretrained("../bert/bert-base-uncased/")
+        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
         # for name, param in self.bert.named_parameters():
         #     param.requires_grad = False
 
@@ -96,7 +99,7 @@ class MyBertFirstWordPiece(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # bert + 冻结参数
-        self.bert = BertModel.from_pretrained("../bert/bert-base-uncased/")
+        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
         # for name, param in self.bert.named_parameters():
         #     param.requires_grad = False
 
@@ -135,7 +138,7 @@ class MyBertMainWordPiece(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # bert + 冻结参数
-        self.bert = BertModel.from_pretrained("../bert/bert-base-uncased/")
+        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
 
         self.linear_id = nn.Linear(768, intent_label_size)
         self.linear_slot = nn.Linear(768, slot_label_size)
@@ -264,7 +267,7 @@ class MyBertAttnWordPiece(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # bert + 冻结参数
-        self.bert = BertModel.from_pretrained("../bert/bert-base-uncased/")
+        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
 
         # attention
         self.wordpiece_attention = AttnContext()
@@ -314,7 +317,7 @@ class MyBertAttnWordPieceCRF(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # bert + 冻结参数
-        self.bert = BertModel.from_pretrained("../bert/bert-base-uncased/")
+        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
 
         # attention
         self.wordpiece_attention = AttnContext()
@@ -371,7 +374,7 @@ class MyBertAttnBPWordPiece(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # bert + 冻结参数
-        self.bert = BertModel.from_pretrained("../bert/bert-base-uncased/")
+        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
 
         # attention
         self.wordpiece_attention = AttentionV2(768)
@@ -382,7 +385,7 @@ class MyBertAttnBPWordPiece(nn.Module):
         self.cross_loss_slot = nn.CrossEntropyLoss()
         self.cross_loss_intent = nn.CrossEntropyLoss()
 
-    def forward(self, xs, masks, token_start_idxs, subword_lengths):
+    def forward(self, xs, masks, token_start_idxs, subword_lengths, is_for_slot=False):
         bert_res = self.bert(xs, attention_mask=masks)
 
         res_all = bert_res[0]
@@ -421,7 +424,7 @@ class MyBertAttnBPWordPieceCRF(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # bert + 冻结参数
-        self.bert = BertModel.from_pretrained("../bert/bert-base-uncased/")
+        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
 
         # attention
         self.wordpiece_attention = AttentionV2(768)
@@ -576,5 +579,5 @@ class MyGRU(nn.Module):
 
 
 if __name__ == '__main__':
-    model = MyBertAttnWordPiece(30, 30)
+    model = MyBertAttnBPWordPiece(30, 30)
     print(model)

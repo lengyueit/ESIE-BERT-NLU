@@ -2,9 +2,11 @@ from torch.utils.data import Dataset
 import torch
 # from pytorch_pretrained_bert import BertModel, BertTokenizer
 import numpy as np
-
 from transformers import BertTokenizer
 
+"""
+dataset
+"""
 
 class MyDataset(Dataset):
 
@@ -20,7 +22,8 @@ class MyDataset(Dataset):
         self.max_size = max_size  # 单句最大长度
 
         self.bert = bert  # 是否使用pre-model
-        self.tokenizer = BertTokenizer.from_pretrained("../bert/bert-base-uncased/bert-base-uncased-vocab.txt")
+        self.tokenizer = BertTokenizer.from_pretrained(
+            "../pretrain-model/bert/bert-base-uncased/vocab.txt")
         # self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
         # bert 特殊字符
@@ -151,7 +154,8 @@ class MyDatasetWordPiece(Dataset):
         self.label_slot_2_id = label_slot_2_id  # slot label表
         self.max_size = max_size  # 单句最大长度
 
-        self.tokenizer = BertTokenizer.from_pretrained("../bert/bert-base-uncased/bert-base-uncased-vocab.txt")
+        self.tokenizer = BertTokenizer.from_pretrained(
+            "../pretrain-model/bert/bert-base-uncased/vocab.txt")
         # self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
         # bert 特殊字符

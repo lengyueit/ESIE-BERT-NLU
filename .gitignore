@@ -2,4 +2,5 @@ version_2
 .DS_Store
 data/chinese
 data/CAIS
-bert
+pretrain-model/bert
+__pycache__

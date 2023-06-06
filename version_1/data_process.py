@@ -1,5 +1,6 @@
 import pickle
 
+"""数据集处理"""
 
 # 读取数据
 def get_data(file, type):

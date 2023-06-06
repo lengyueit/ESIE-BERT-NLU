@@ -8,6 +8,7 @@ from seqeval.metrics import classification_report as seq_classification_report, 
 import pickle
 from tqdm import tqdm
 import warnings
+import config
 
 warnings.filterwarnings("ignore")
 
@@ -450,15 +451,16 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 if __name__ == "__main__":
     UNK = "<UNK>"
     PAD = "<PAD>"
-    batch_size = 10
-    lr = 0.00005
-    epoch = 30
-    hidden_num = 128
-    word_embedding = 64
-    max_size = 50
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    batch_size = config.batch_size
+    lr = config.lr
+    epoch = config.epoch
+    hidden_num = config.hidden_num
+    word_embedding = config.word_embedding
+    max_size = config.max_size
+    device = config.device
+
     atis_or_snip = True  # True = atis , False = snip
-    is_for_slot = True  # True is only train slot , False  is jointly train
+    is_for_slot = True  # True is only train slot , False is jointly train
 
     # 加载数据
     if atis_or_snip:
