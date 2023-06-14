@@ -13,17 +13,23 @@ import config
 warnings.filterwarnings("ignore")
 
 
-# 读取数据
-def get_data(dataset, type):
+# load data
+def get_data(dataset, data_type):
+    """
+    获取 input intent_label slot_label
+    :param dataset: ATIS or SNIPS
+    :param data_type: train valid test
+    :return:
+    """
     data_file = "../data/data.pkl"
     with open(data_file, "rb") as f:
         datas = pickle.load(f)
     data = datas[dataset]
 
-    return data[type][0], data[type][1], data[type][2]
+    return data[data_type][0], data[data_type][1], data[data_type][2]
 
 
-# 构建词表
+# create vocab_dic
 def get_dict(datas, label_intent, label_slot):
     word_2_id = {}
     label_intent_2_id = {}
@@ -449,8 +455,6 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
 
 if __name__ == "__main__":
-    UNK = "<UNK>"
-    PAD = "<PAD>"
     batch_size = config.batch_size
     lr = config.lr
     epoch = config.epoch

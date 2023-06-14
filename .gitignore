@@ -4,3 +4,4 @@ data/chinese
 data/CAIS
 pretrain-model/bert
 __pycache__
+bert

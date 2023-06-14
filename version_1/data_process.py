@@ -1,12 +1,20 @@
+import os
 import pickle
+import config
 
-"""数据集处理"""
+"""dataset process"""
 
-# 读取数据
-def get_data(file, type):
-    data_file = file + "/" + type + "/seq.in"
-    label_intent_file = file + "/" + type + "/label"
-    label_slot_file = file + "/" + type + "/seq.out"
+
+def get_data(file, data_type):
+    """
+    获取数据
+    :param file: root path
+    :param data_type: train valid test
+    :return: datas, label_intent, label_slot
+    """
+    data_file = file + "/" + data_type + "/seq.in"
+    label_intent_file = file + "/" + data_type + "/label"
+    label_slot_file = file + "/" + data_type + "/seq.out"
 
     with open(data_file, "r", encoding="utf8") as f:
         datas = []
@@ -38,21 +46,27 @@ def get_data(file, type):
     return datas, label_intent, label_slot
 
 
-if __name__ == "__main__":
-    save_file = "../data/data.pkl"
+def data_save_pkl(save_file):
+    """
+    保存数据到pkl
+    :param save_file: file path
+    :return:  none
+    """
     data = {}
 
     # 加载数据
-    datas_train_atis, label_intent_train_atis, label_slot_train_atis = get_data(file="../data/atis", type="train")
-    datas_valid_atis, label_intent_valid_atis, label_slot_valid_atis = get_data(file="../data/atis", type="valid")
-    datas_test_atis, label_intent_test_atis, label_slot_test_atis = get_data(file="../data/atis", type="test")
+    datas_train_atis, label_intent_train_atis, label_slot_train_atis = get_data(file="../data/atis", data_type="train")
+    datas_valid_atis, label_intent_valid_atis, label_slot_valid_atis = get_data(file="../data/atis", data_type="valid")
+    datas_test_atis, label_intent_test_atis, label_slot_test_atis = get_data(file="../data/atis", data_type="test")
     data['atis'] = {"train": [datas_train_atis, label_intent_train_atis, label_slot_train_atis],
                     "valid": [datas_valid_atis, label_intent_valid_atis, label_slot_valid_atis],
                     "test": [datas_test_atis, label_intent_test_atis, label_slot_test_atis]}
 
-    datas_train_snips, label_intent_train_snips, label_slot_train_snips = get_data(file="../data/snips", type="train")
-    datas_valid_snips, label_intent_valid_snips, label_slot_valid_snips = get_data(file="../data/snips", type="valid")
-    datas_test_snips, label_intent_test_snips, label_slot_test_snips = get_data(file="../data/snips", type="test")
+    datas_train_snips, label_intent_train_snips, label_slot_train_snips = get_data(file="../data/snips",
+                                                                                   data_type="train")
+    datas_valid_snips, label_intent_valid_snips, label_slot_valid_snips = get_data(file="../data/snips",
+                                                                                   data_type="valid")
+    datas_test_snips, label_intent_test_snips, label_slot_test_snips = get_data(file="../data/snips", data_type="test")
     data['snips'] = {"train": [datas_train_snips, label_intent_train_snips, label_slot_train_snips],
                      "valid": [datas_valid_snips, label_intent_valid_snips, label_slot_valid_snips],
                      "test": [datas_test_snips, label_intent_test_snips, label_slot_test_snips]}
@@ -60,3 +74,64 @@ if __name__ == "__main__":
     # 写入文件
     with open(save_file, 'wb') as f:
         pickle.dump(data, f)
+
+
+def get_dict(datas, label_intent, label_slot):
+    word_2_id = {}
+    label_intent_2_id = {}
+    id_2_label_intent = []
+    label_slot_2_id = {}
+    id_2_label_slot = []
+
+    for data in datas:
+        for i in data.split(" "):
+            word_2_id[i] = word_2_id.get(i, 0) + 1
+
+    # 构建词表
+    id_2_word = sorted([i for i, v in word_2_id.items() if v >= 0], key=lambda v: v,
+                       reverse=True)  # 首先是根据频次筛选，然后sort一下降序，然后取词表最大
+
+    vocab_dic = {word_count: idx for idx, word_count in enumerate(id_2_word)}  ##从词表字典中找到我们需要的那些就可以了
+    vocab_dic.update({config.UNK: len(vocab_dic), config.PAD: len(vocab_dic) + 1})  ##然后更新两个字符，一个是unk字符，一个pad字符
+
+    # 构建标签 intent
+    id_2_label_intent = list(set(label_intent))
+    id_2_label_intent = sorted(id_2_label_intent)
+    label_intent_2_id = {v: i for i, v in enumerate(id_2_label_intent)}
+    label_intent_2_id.update({config.UNK: len(label_slot_2_id)})
+    id_2_label_intent.append(config.UNK)
+
+    # 构建标签 slot
+    for data in label_slot:
+        for i in data.split(" "):
+            label_slot_2_id[i] = word_2_id.get(i, 0) + 1
+
+    id_2_label_slot = sorted([i for i, v in label_slot_2_id.items()], key=lambda v: v,
+                             reverse=True)  # 首先是根据频次筛选，然后sort一下降序，然后取词表最大
+
+    label_slot_2_id = {word_count: idx for idx, word_count in enumerate(id_2_label_slot)}
+    label_slot_2_id.update({config.UNK: len(label_slot_2_id), config.PAD: len(label_slot_2_id) + 1})
+    id_2_label_slot.append(config.UNK)
+    id_2_label_slot.append(config.PAD)
+    return vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
+
+
+if __name__ == "__main__":
+    # 加载数据
+    data_pkl_file_path = config.data_pkl_file_path
+    if os.path.exists(data_pkl_file_path):
+        os.remove(data_pkl_file_path)
+    data_save_pkl(data_pkl_file_path)
+
+    # todo 构建词表 将所有train test valid 词追加进入
+    # if atis_or_snip:
+    #     datas_train, label_intent_train, label_slot_train = get_data(dataset="atis", type="train")
+    #     datas_valid, label_intent_valid, label_slot_valid = get_data(dataset="atis", type="valid")
+    #     datas_test, label_intent_test, label_slot_test = get_data(dataset="atis", type="test")
+    # else:
+    #     datas_train, label_intent_train, label_slot_train = get_data(dataset="snips", type="train")
+    #     datas_valid, label_intent_valid, label_slot_valid = get_data(dataset="snips", type="valid")
+    #     datas_test, label_intent_test, label_slot_test = get_data(dataset="snips", type="test")
+    #
+    # word_2_id, id_2_word, label_intent_2_id, id_2_label_intent, \
+    # label_slot_2_id, id_2_label_slot = get_dict(datas_train, label_intent_train, label_slot_train)
