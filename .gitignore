@@ -4,4 +4,5 @@ data/chinese
 data/CAIS
 pretrain-model/bert
 __pycache__
+version_1/__pycache__
 bert
