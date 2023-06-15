@@ -76,44 +76,61 @@ def data_save_pkl(save_file):
         pickle.dump(data, f)
 
 
-def get_dict(datas, label_intent, label_slot):
-    word_2_id = {}
-    label_intent_2_id = {}
-    id_2_label_intent = []
-    label_slot_2_id = {}
-    id_2_label_slot = []
+def get_dict(all_data):
+    dict_result = {}
 
-    for data in datas:
-        for i in data.split(" "):
-            word_2_id[i] = word_2_id.get(i, 0) + 1
+    data_type = ['atis', 'snips']
+    for cur_type in data_type:
+        word_2_id = {}
+        label_intent_2_id = {}
+        id_2_label_intent = []
+        label_slot_2_id = {}
+        id_2_label_slot = set()
 
-    # 构建词表
-    id_2_word = sorted([i for i, v in word_2_id.items() if v >= 0], key=lambda v: v,
-                       reverse=True)  # 首先是根据频次筛选，然后sort一下降序，然后取词表最大
+        # data   label_intent   label_slot
+        datas_train, label_intent_train, label_slot_train = all_data[cur_type]['train']
+        datas_valid, label_intent_valid, label_slot_valid = all_data[cur_type]['valid']
+        datas_test, label_intent_test, label_slot_test = all_data[cur_type]['test']
 
-    vocab_dic = {word_count: idx for idx, word_count in enumerate(id_2_word)}  ##从词表字典中找到我们需要的那些就可以了
-    vocab_dic.update({config.UNK: len(vocab_dic), config.PAD: len(vocab_dic) + 1})  ##然后更新两个字符，一个是unk字符，一个pad字符
+        label_intent = set(label_intent_train + label_intent_valid + label_intent_test)
+        label_slot = label_slot_train + label_slot_valid + label_slot_test
 
-    # 构建标签 intent
-    id_2_label_intent = list(set(label_intent))
-    id_2_label_intent = sorted(id_2_label_intent)
-    label_intent_2_id = {v: i for i, v in enumerate(id_2_label_intent)}
-    label_intent_2_id.update({config.UNK: len(label_slot_2_id)})
-    id_2_label_intent.append(config.UNK)
+        # 词频统计
+        for data in datas_train:
+            for i in data.split(" "):
+                word_2_id[i] = word_2_id.get(i, 0) + 1
+        for data in datas_valid:
+            for i in data.split(" "):
+                word_2_id[i] = word_2_id.get(i, 0) + 1
+        for data in datas_test:
+            for i in data.split(" "):
+                word_2_id[i] = word_2_id.get(i, 0) + 1
 
-    # 构建标签 slot
-    for data in label_slot:
-        for i in data.split(" "):
-            label_slot_2_id[i] = word_2_id.get(i, 0) + 1
+        # 构建词表
+        id_2_word = sorted([i for i, v in word_2_id.items() if v >= 1], key=lambda v: v,
+                           reverse=True)  # 首先是根据频次筛选，然后sort一下降序，然后取词表最大
 
-    id_2_label_slot = sorted([i for i, v in label_slot_2_id.items()], key=lambda v: v,
-                             reverse=True)  # 首先是根据频次筛选，然后sort一下降序，然后取词表最大
+        vocab_dic = {word_count: idx for idx, word_count in enumerate(id_2_word)}  ##从词表字典中找到我们需要的那些就可以了
+        vocab_dic.update({config.UNK: len(vocab_dic), config.PAD: len(vocab_dic) + 1})  ##然后更新两个字符，一个是unk字符，一个pad字符
 
-    label_slot_2_id = {word_count: idx for idx, word_count in enumerate(id_2_label_slot)}
-    label_slot_2_id.update({config.UNK: len(label_slot_2_id), config.PAD: len(label_slot_2_id) + 1})
-    id_2_label_slot.append(config.UNK)
-    id_2_label_slot.append(config.PAD)
-    return vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
+        # 构建标签 intent
+        id_2_label_intent = sorted(list(label_intent))
+        label_intent_2_id = {v: i for i, v in enumerate(id_2_label_intent)}
+
+        # 构建标签 slot
+        for data in label_slot:
+            for i in data.split(" "):
+                id_2_label_slot.add(i)
+
+        id_2_label_slot = sorted(list(id_2_label_slot))
+
+        label_slot_2_id = {word_count: idx for idx, word_count in enumerate(id_2_label_slot)}
+        label_slot_2_id.update({config.UNK: len(label_slot_2_id), config.PAD: len(label_slot_2_id) + 1})
+        id_2_label_slot.append(config.UNK)
+        id_2_label_slot.append(config.PAD)
+
+        dict_result[cur_type] = vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
+    return dict_result
 
 
 if __name__ == "__main__":
@@ -123,15 +140,9 @@ if __name__ == "__main__":
         os.remove(data_pkl_file_path)
     data_save_pkl(data_pkl_file_path)
 
-    # todo 构建词表 将所有train test valid 词追加进入
-    # if atis_or_snip:
-    #     datas_train, label_intent_train, label_slot_train = get_data(dataset="atis", type="train")
-    #     datas_valid, label_intent_valid, label_slot_valid = get_data(dataset="atis", type="valid")
-    #     datas_test, label_intent_test, label_slot_test = get_data(dataset="atis", type="test")
-    # else:
-    #     datas_train, label_intent_train, label_slot_train = get_data(dataset="snips", type="train")
-    #     datas_valid, label_intent_valid, label_slot_valid = get_data(dataset="snips", type="valid")
-    #     datas_test, label_intent_test, label_slot_test = get_data(dataset="snips", type="test")
-    #
-    # word_2_id, id_2_word, label_intent_2_id, id_2_label_intent, \
-    # label_slot_2_id, id_2_label_slot = get_dict(datas_train, label_intent_train, label_slot_train)
+    # 构建词表 将所有train test valid 词追加进入
+    with open(data_pkl_file_path, "rb") as fp:
+        all_data = pickle.load(fp)
+
+
+    dict_result = get_dict(all_data)
