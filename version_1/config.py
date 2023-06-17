@@ -2,7 +2,7 @@ import os
 
 # data
 data_pkl_file_path = os.path.join("..", "data", "data.pkl")
-data_vocab_dic_pkl_file_path = os.path.join("..", "data", "data.pkl")
+data_vocab_dic_pkl_file_path = os.path.join("..", "data", "vocab.pkl")
 UNK = "<UNK>"
 PAD = "<PAD>"
 

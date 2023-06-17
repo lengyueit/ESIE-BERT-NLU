@@ -77,6 +77,11 @@ def data_save_pkl(save_file):
 
 
 def get_dict(all_data):
+    """
+    获取词表
+    :param all_data: 数据
+    :return: vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
+    """
     dict_result = {}
 
     data_type = ['atis', 'snips']
@@ -129,20 +134,44 @@ def get_dict(all_data):
         id_2_label_slot.append(config.UNK)
         id_2_label_slot.append(config.PAD)
 
-        dict_result[cur_type] = vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
+        # dict_result[cur_type] = vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
+        dict_result[cur_type] = {
+            "vocab_dic": vocab_dic,
+            "id_2_word": id_2_word,
+            "label_intent_2_id": label_intent_2_id,
+            "id_2_label_intent": id_2_label_intent,
+            "label_slot_2_id": label_slot_2_id,
+            "id_2_label_slot": id_2_label_slot,
+        }
     return dict_result
+
+
+def data_vocab_save_pkl(save_file):
+    """
+    将词表保存进pkl
+    :param save_file:
+    :return:
+    """
+    # 构建词表 将所有train test valid 词追加进入
+    with open(data_pkl_file_path, "rb") as fp:
+        all_data = pickle.load(fp)
+
+    dict_result = get_dict(all_data)
+    # 写入文件
+    with open(save_file, 'wb') as f:
+        pickle.dump(dict_result, f)
 
 
 if __name__ == "__main__":
     # 加载数据
     data_pkl_file_path = config.data_pkl_file_path
-    if os.path.exists(data_pkl_file_path):
-        os.remove(data_pkl_file_path)
+    # if os.path.exists(data_pkl_file_path):
+    #     os.remove(data_pkl_file_path)
     data_save_pkl(data_pkl_file_path)
 
-    # 构建词表 将所有train test valid 词追加进入
-    with open(data_pkl_file_path, "rb") as fp:
-        all_data = pickle.load(fp)
 
-
-    dict_result = get_dict(all_data)
+    # 加载词表
+    data_vocab_dic_pkl_file_path = config.data_vocab_dic_pkl_file_path
+    # if os.path.exists(data_vocab_dic_pkl_file_path):
+    #     os.remove(data_vocab_dic_pkl_file_path)
+    data_vocab_save_pkl(data_vocab_dic_pkl_file_path)
