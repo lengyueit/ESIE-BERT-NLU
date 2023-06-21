@@ -166,11 +166,15 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
             # 计算 id loss
             if is_for_slot == False:
-                loss_id = model.cross_loss_fn(res_id, ys_intent)
+                loss_id = model.cross_loss_fn(res_id, ys_intent)  # [batch_size, sentence_len] <-> [batch_size]
+
+            # 丢掉 [CLS]
+            res_sf = res_sf[:, 1:, ]
+            ys_slot = ys_slot[:, 1:]
 
             # 计算 sf loss
             if is_CRF:
-                loss_sf = model.loss_fn(res_sf[:, 1:, ], ys_slot[:, 1:], masks_crf)
+                loss_sf = model.loss_fn(res_sf, ys_slot, masks_crf)
             else:
                 res_sf_2D = res_sf.reshape(-1, res_sf.shape[-1])
                 ys_slot_2D = ys_slot.reshape(-1)
@@ -204,12 +208,12 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
             # 计算sf f1
             if is_CRF:
-                pre_sf_list = model.crf.decode(res_sf[:, 1:, ], masks_crf)
+                pre_sf_list = model.crf.decode(res_sf, masks_crf)
 
             for one_pre, one_tag, one_len in zip(pre_sf_list, ys_slot_list, xs_len):
-                if is_CRF is False:
-                    one_pre = one_pre[1:one_len + 1]
-                one_tag = one_tag[1:one_len + 1]
+                # if is_CRF is False:
+                #     one_pre = one_pre[1:one_len + 1]
+                # one_tag = one_tag[1:one_len + 1]
 
                 one_pre = [id_2_label_slot[i] for i in one_pre]
                 one_tag = [id_2_label_slot[i] for i in one_tag]
@@ -412,14 +416,19 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             all_pre_sklearn = []
             all_tag_sklearn = []
 
+            # 丢掉 [CLS]
+            res_sf = res_sf[:, 1:, ]
+            ys_slot = ys_slot[:, 1:]
+
+
             if is_CRF:
-                pre_sf_list = model.crf.decode(pre_sf[:, 1:, ], masks_crf)
+                pre_sf_list = model.crf.decode(pre_sf, masks_crf)
 
             for one_pre, one_tag, one_len in zip(pre_sf_list, ys_slot_list, xs_len):
-                if is_CRF is False:
-                    one_pre = one_pre[1:one_len + 1]
+                # if is_CRF is False:
+                #     one_pre = one_pre[1:one_len + 1]
 
-                one_tag = one_tag[1:one_len + 1]
+                # one_tag = one_tag[1:one_len + 1]
 
                 # sklearn
                 all_pre_sklearn += one_pre
@@ -508,10 +517,11 @@ if __name__ == "__main__":
     word_embedding = config.word_embedding
     max_size = config.max_size
     device = config.device
+    is_CRF = config.is_CRF
 
     dataset_type = ["atis", "snips"]  # 0 = atis , 1 = snips
 
-    is_for_slot = True  # True is only train slot task, False is jointly train slot and intent tasks
+    is_for_slot = False  # True is only train slot task, False is jointly train slot and intent tasks
 
     # 加载数据集 load dataset
     with open(config.data_pkl_file_path, "rb") as fp:
@@ -571,4 +581,4 @@ if __name__ == "__main__":
     # model = MyBertAttnBPWordPieceCRF(intent_label_size, slot_label_size)
     train(model=model, train_dataloader=train_dataloader, valid_dataloader=dev_dataloader,
           test_dataloader=test_dataloader, device=device,
-          batch_size=batch_size, num_epoch=epoch, lr=lr, optim='adamW', is_CRF=True, is_for_slot=is_for_slot)
+          batch_size=batch_size, num_epoch=epoch, lr=lr, optim='adamW', is_CRF=is_CRF, is_for_slot=is_for_slot)

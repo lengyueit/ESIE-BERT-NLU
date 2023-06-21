@@ -7,10 +7,11 @@ UNK = "<UNK>"
 PAD = "<PAD>"
 
 # train
-batch_size = 30
-lr = 0.00005
+batch_size = 16
+lr = 0.00001
 epoch = 10
 dataset_type_id = 0  # 0 atis; 1 snips
+is_CRF = False
 
 # model para
 hidden_num = 128
