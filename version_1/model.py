@@ -21,13 +21,12 @@ class MyBertFirstWordPiece(nn.Module):
         # for name, param in self.bert.named_parameters():
         #     param.requires_grad = False
 
-        self.linear_id = nn.Linear(768, intent_label_size)
-        self.linear_slot = nn.Linear(768, slot_label_size)
+        self.linear_id = nn.Linear(config.bert_hidden_state_size, intent_label_size)
+        self.linear_slot = nn.Linear(config.bert_hidden_state_size, slot_label_size)
 
-        self.cross_loss_slot = nn.CrossEntropyLoss()
-        self.cross_loss_intent = nn.CrossEntropyLoss()
+        self.cross_loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self, xs, masks, token_start_idxs, _):
+    def forward(self, xs, masks, token_start_idxs, _, __):
         bert_res = self.bert(xs, attention_mask=masks)
 
         res_all = bert_res[0]
@@ -96,7 +95,7 @@ class MyBertAttnBPWordPiece(nn.Module):
 
         # attention
         self.wordpiece_attention = SAA_Attn(config.bert_hidden_state_size)
-        self.intent_attention = IAA_Attn(config.bert_hidden_state_size)
+        # self.intent_attention = IAA_Attn(config.bert_hidden_state_size)
 
         self.linear_id = nn.Linear(config.bert_hidden_state_size, intent_label_size)
         self.linear_slot = nn.Linear(config.bert_hidden_state_size, slot_label_size)
