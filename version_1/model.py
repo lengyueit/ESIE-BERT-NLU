@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import config
 from transformers import BertModel, logging
 from torchcrf import CRF
 
@@ -197,65 +197,31 @@ class AttnContext(nn.Module):
         return attn_vector
 
 
-# 注意力机制 BP反向传播 将first_embedding 一起linear
-class AttentionV1(nn.Module):
+# 注意力机制 SSA_Attn
+class SSA_Attn(nn.Module):
     def __init__(self, hidden_dim):
-        super(AttentionV1, self).__init__()
-        self.attn = nn.Linear((hidden_dim * 2), hidden_dim)
-        self.v = nn.Linear(hidden_dim, 1, bias=False)
-
-    def concat_score(self, first_embedding, all_embedding):
-        # all_embedding:[wordPiece_len, hidden_size]
-        # first_embedding:[1, hidden_size]
-
-        word_piece_len = all_embedding.shape[0]
-        first_embedding = first_embedding.repeat(word_piece_len, 1)  # [wordPiece_len, hidden_size]
-        energy = torch.tanh(
-            self.attn(torch.cat((first_embedding, all_embedding), dim=1)))  # [wordPiece_len, hidden_dim]
-        attention = self.v(energy).squeeze(1)  # 前向转播为一个值，相比直接将789进行相加 [wordPiece_len]
-        return attention  # [wordPiece_len]
+        super(SSA_Attn, self).__init__()
+        self.Wsq = nn.Linear(hidden_dim, hidden_dim)
+        self.Wsk = nn.Linear(hidden_dim, hidden_dim)
+        self.Wsv = nn.Linear(hidden_dim, hidden_dim)
 
     def forward(self, first_embedding, all_embedding):
-        # all_embedding:[wordPiece_len, hidden_size]
         # first_embedding:[1, hidden_size]
+        # all_embedding:[wordPiece_len, hidden_size]
 
-        attn_energies = self.concat_score(first_embedding, all_embedding)
+        # self-attn
+        Q = self.Wsq(all_embedding)
+        K = self.Wsk(all_embedding)
+        V = self.Wsv(all_embedding)
+        attn_weight = Q @ K.transpose(0, 1)  # [wordPiece_len, wordPiece_len]
 
-        attn_weight = torch.functional.F.softmax(attn_energies).unsqueeze(0)  # # softmax归一化，[1, wordPiece_len]
+        attn_score = F.softmax(attn_weight, dim=1)  # softmax归一化，[wordPiece_len, wordPiece_len]
 
         # 注意力向量
-        attn_vector = attn_weight.mm(all_embedding)  # [1, hidden_size]
+        attn_vector = attn_score.mm(V)  # [wordPiece_len, hidden_size]
 
-        return attn_vector + first_embedding
-
-
-# 注意力机制 BP反向传播 只用wordPiece 做linear
-class AttentionV2(nn.Module):
-    def __init__(self, hidden_dim):
-        super(AttentionV2, self).__init__()
-        self.attn = nn.Linear(hidden_dim, hidden_dim)
-        self.v = nn.Linear(hidden_dim, 1, bias=False)
-
-    def concat_score(self, all_embedding):
-        # all_embedding:[wordPiece_len, hidden_size]
-        # first_embedding:[1, hidden_size]
-
-        energy = torch.tanh(self.attn(all_embedding))  # [wordPiece_len, hidden_dim]
-        attention = self.v(energy).squeeze(1)  # 前向转播为一个值 而不是直接将789进行简单相加 [wordPiece_len]
-        return attention  # [wordPiece_len]
-
-    def forward(self, first_embedding, all_embedding):
-        # all_embedding:[wordPiece_len, hidden_size]
-        # first_embedding:[1, hidden_size]
-
-        attn_energies = self.concat_score(all_embedding)
-
-        attn_weight = torch.functional.F.softmax(attn_energies).unsqueeze(0)  # # softmax归一化，[1, wordPiece_len]
-
-        # 注意力向量
-        attn_vector = attn_weight.mm(all_embedding)  # [1, hidden_size]
-
-        return attn_vector + first_embedding
+        # 返回首词的SAA feature
+        return attn_vector[0] + first_embedding
 
 
 # Bert joint MyBertAttnWordPiece  对wordpiece做attention操作（点乘）
@@ -370,22 +336,20 @@ class MyBertAttnBPWordPiece(nn.Module):
     def __init__(self, intent_label_size, slot_label_size):
         super(MyBertAttnBPWordPiece, self).__init__()
 
-        # 定义网络层
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        # bert + 冻结参数
+        # bert
         self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
 
         # attention
-        self.wordpiece_attention = AttentionV2(768)
+        self.wordpiece_attention = SSA_Attn(config.bert_hidden_state_size)
 
-        self.linear_id = nn.Linear(768, intent_label_size)
-        self.linear_slot = nn.Linear(768, slot_label_size)
+        self.linear_id = nn.Linear(config.bert_hidden_state_size, intent_label_size)
+        self.linear_slot = nn.Linear(config.bert_hidden_state_size, slot_label_size)
 
-        self.cross_loss_slot = nn.CrossEntropyLoss()
-        self.cross_loss_intent = nn.CrossEntropyLoss()
+        self.cross_loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self, xs, masks, token_start_idxs, subword_lengths, is_for_slot=False):
+    def forward(self, xs, masks, token_start_idxs, subword_lengths, is_for_slot=None):
+        batch_size, _ = xs.shape
+
         bert_res = self.bert(xs, attention_mask=masks)
 
         res_all = bert_res[0]
@@ -395,7 +359,8 @@ class MyBertAttnBPWordPiece(nn.Module):
         res_id = self.linear_id(res)
 
         # slot f, wordpiece 做attention操作
-        bert_res_main_wordpiece = torch.zeros((xs.shape[0], 51, 768), device=self.device)
+        bert_res_main_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),
+                                              device=config.device)
 
         for i, one_batch in enumerate(res_all):
             for index, (start, lens) in enumerate(zip(token_start_idxs[i], subword_lengths[i])):
@@ -403,11 +368,12 @@ class MyBertAttnBPWordPiece(nn.Module):
                 if lens == 1:
                     word = one_batch[start, :]
                 else:
-                    target_index = torch.tensor([start, start + lens], device=self.device)
+                    # 选出指定word的 subword 对应的tensor
+                    target_index = torch.range(start, start + lens, device=config.device, dtype=torch.int)
                     cur_index_tensor = torch.index_select(one_batch, dim=0, index=target_index)
 
                     # 对wordPiece首词做attn
-                    attention_word = self.wordpiece_attention(one_batch[start, :], cur_index_tensor)
+                    attention_word = self.wordpiece_attention(cur_index_tensor[0], cur_index_tensor)
                     word = attention_word
                 bert_res_main_wordpiece[i][index] = word
 

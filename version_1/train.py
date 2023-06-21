@@ -1,7 +1,6 @@
 import torch
+from torch.utils.data import Dataset, DataLoader
 from model import *
-from data import *
-from torch.utils.data import DataLoader
 from sklearn.metrics import classification_report, accuracy_score, f1_score, precision_score, recall_score
 from seqeval.metrics import classification_report as seq_classification_report, accuracy_score as seq_accuracy_score, \
     f1_score as seq_f1_score, precision_score as seq_precision_score, recall_score as seq_recall_score
@@ -9,65 +8,109 @@ import pickle
 from tqdm import tqdm
 import warnings
 import config
+from transformers import BertTokenizer
+import numpy as np
 
 warnings.filterwarnings("ignore")
 
 
-# load data
-def get_data(dataset, data_type):
-    """
-    获取 input intent_label slot_label
-    :param dataset: ATIS or SNIPS
-    :param data_type: train valid test
-    :return:
-    """
-    data_file = "../data/data.pkl"
-    with open(data_file, "rb") as f:
-        datas = pickle.load(f)
-    data = datas[dataset]
+class MyDatasetWordPiece(Dataset):
+    def __init__(self, datas, label_intent, label_slot, word_2_id, label_intent_2_id, label_slot_2_id, max_size):
+        self.datas = datas  # 数据集
+        self.label_intent = label_intent  # label_intent label集
+        self.label_slot = label_slot  # label_slot label集
 
-    return data[data_type][0], data[data_type][1], data[data_type][2]
+        self.word_2_id = word_2_id  # 词表 discard，利用BERT的词表即可
+        self.label_intent_2_id = label_intent_2_id  # intent label表
+        self.label_slot_2_id = label_slot_2_id  # slot label表
+        self.max_size = max_size  # 单句最大长度
 
+        self.tokenizer = BertTokenizer.from_pretrained(
+            "../pretrain-model/bert/bert-base-uncased/vocab.txt")
+        # self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
-# create vocab_dic
-def get_dict(datas, label_intent, label_slot):
-    word_2_id = {}
-    label_intent_2_id = {}
-    id_2_label_intent = []
-    label_slot_2_id = {}
-    id_2_label_slot = []
+        # bert 特殊字符
+        self.PAD, self.CLS, self.SEP = '[PAD]', '[CLS]', '[SEP]'
 
-    for data in datas:
-        for i in data.split(" "):
-            word_2_id[i] = word_2_id.get(i, 0) + 1
+    def __getitem__(self, index):
+        sentence = self.datas[index]
+        label_intent = self.label_intent[index]
+        label_slot = self.label_slot[index]
 
-    # 构建词表
-    id_2_word = sorted([i for i, v in word_2_id.items() if v >= 0], key=lambda v: v,
-                       reverse=True)  # 首先是根据频次筛选，然后sort一下降序，然后取词表最大
+        # y label
+        y_intent_index = self.label_intent_2_id.get(label_intent, '<UNK>')
 
-    vocab_dic = {word_count: idx for idx, word_count in enumerate(id_2_word)}  ##从词表字典中找到我们需要的那些就可以了
-    vocab_dic.update({UNK: len(vocab_dic), PAD: len(vocab_dic) + 1})  ##然后更新两个字符，一个是unk字符，一个pad字符
+        y_slot = label_slot.split(" ")[:self.max_size]
+        y_slot_index = [self.label_slot_2_id.get(word, '<UNK>') for word in
+                        y_slot]
 
-    # 构建标签 intent
-    id_2_label_intent = list(set(label_intent))
-    id_2_label_intent = sorted(id_2_label_intent)
-    label_intent_2_id = {v: i for i, v in enumerate(id_2_label_intent)}
-    label_intent_2_id.update({UNK: len(label_slot_2_id)})
-    id_2_label_intent.append(UNK)
+        cur_len = len(y_slot_index)
 
-    # 构建标签 slot
-    for data in label_slot:
-        for i in data.split(" "):
-            label_slot_2_id[i] = word_2_id.get(i, 0) + 1
+        # 获取x、y
+        sentence_cut = [i.strip() for i in sentence.split(" ") if i.strip() != '']  # 严格按空格切分
 
-    id_2_label_slot = sorted([i for i, v in label_slot_2_id.items()], key=lambda v: v,
-                             reverse=True)  # 首先是根据频次筛选，然后sort一下降序，然后取词表最大
+        subwords = list(map(self.tokenizer.tokenize, sentence_cut[:self.max_size]))  # 按词进行wordpiece，最大长度50
+        subword_lengths = list(map(len, subwords))  # 计算每个词wordpiece的长度
+        subword_lengths = subword_lengths + (self.max_size - cur_len) * [1]
 
-    label_slot_2_id = {word_count: idx for idx, word_count in enumerate(id_2_label_slot)}
-    label_slot_2_id.update({UNK: len(label_slot_2_id), PAD: len(label_slot_2_id) + 1})
-    id_2_label_slot.append(UNK)
-    id_2_label_slot.append(PAD)
-    return vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
+        subwords = ['[CLS]'] + self.tokenizer.tokenize(sentence)  # CLS + 原句wordpiece
+        token_start_idxs = 1 + np.cumsum(
+            [0] + subword_lengths[:-1])  # 基于cumsum方法对长度进行累加，获取词首index，整体+1，相当于加入了cls标记占位的影响
+        xs_index = self.tokenizer.convert_tokens_to_ids(subwords)
+
+        y_slot_index = [self.label_slot_2_id.get('<PAD>')] + y_slot_index
+
+        return xs_index, y_intent_index, y_slot_index, cur_len, token_start_idxs.tolist(), subword_lengths
+
+    def __len__(self):
+        return len(self.datas)
+
+    # batch 数据补齐
+    def batch_data_process(self, batch_datas):
+        xs = []
+        ys_intent = []
+        ys_slot = []
+        xs_len = []  # 原句长度
+        xs_wordpiece_len = []  # 分词后长度 - 原句长度
+        masks = []  # attention pad mask
+        masks_crf = []  # crf mask; 数据为true，PAD为False
+        token_start_idxs = []  # wordpiece 首词下标
+        subword_lengths = []
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        for x, y_intent, y_slot, cur_len, token_start_idx, subword_length in batch_datas:
+            xs.append(x)
+            ys_slot.append(y_slot)
+            ys_intent.append(y_intent)
+            xs_len.append(cur_len)  # 原句长度
+            xs_wordpiece_len.append(len(x) - cur_len)  # 句子的分词后长度- 原句长度
+            masks.append([1] * len(x))
+            masks_crf.append([1] * cur_len)
+
+            token_start_idxs.append([0] + token_start_idx)  # 加上CLS的下标
+            subword_lengths.append([1] + subword_length)
+
+        cur_max_len = max(xs_wordpiece_len)  # 当前batch中 subwords 最长
+
+        # 将数据补齐
+        xs = [i + self.tokenizer.convert_tokens_to_ids([self.PAD]) * (self.max_size + cur_max_len - len(i)) for
+              i in xs]
+        masks = [i + [0] * (self.max_size + cur_max_len - len(i)) for i in masks]
+        masks_crf = [i + [0] * (self.max_size - len(i)) for i in masks_crf]
+
+        ys_slot = [i + [self.label_slot_2_id["<PAD>"]] * (self.max_size + 1 - len(i)) for i in
+                   ys_slot]
+
+        masks = torch.tensor(masks, dtype=torch.long, device=device)
+        masks_crf = torch.tensor(masks_crf, dtype=torch.bool, device=device)
+        xs = torch.tensor(xs, dtype=torch.long, device=device)
+        ys_intent = torch.tensor(ys_intent, dtype=torch.long, device=device)
+        ys_slot = torch.tensor(ys_slot, dtype=torch.long, device=device)
+        xs_len = torch.tensor(xs_len, dtype=torch.long, device=device)
+        token_start_idxs = torch.tensor(token_start_idxs, dtype=torch.long, device=device)
+
+        return xs, ys_intent, ys_slot, xs_len, masks, token_start_idxs, subword_lengths, masks_crf
 
 
 def train(model, train_dataloader, valid_dataloader, test_dataloader, device, batch_size, num_epoch, lr, optim='adam',
@@ -85,6 +128,7 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
     elif optim == 'adamW':
         optimizer = torch.optim.AdamW((param for param in model.parameters() if param.requires_grad), lr=lr,
                                       weight_decay=0)
+
     # 用来保存每个epoch的Loss和acc以便最后画图
     train_losses = []
     train_id_acc_list = []
@@ -122,7 +166,7 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
             # 计算 id loss
             if is_for_slot == False:
-                loss_id = model.cross_loss_intent(res_id, ys_intent)
+                loss_id = model.cross_loss_fn(res_id, ys_intent)
 
             # 计算 sf loss
             if is_CRF:
@@ -130,7 +174,7 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             else:
                 res_sf_2D = res_sf.reshape(-1, res_sf.shape[-1])
                 ys_slot_2D = ys_slot.reshape(-1)
-                loss_sf = model.cross_loss_slot(res_sf_2D, ys_slot_2D)
+                loss_sf = model.cross_loss_fn(res_sf_2D, ys_slot_2D)
 
             if is_for_slot:
                 loss = loss_sf
@@ -352,7 +396,8 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
                 print(classification_report(ys_intent_list, pre_id))
                 print("整体验证集上的acc intent :{}".format(accuracy_score(ys_intent_list, pre_id)))
                 print("整体验证集上的pre_s intent :{}".format(precision_score(ys_intent_list, pre_id, average="macro")))
-                print("整体验证集上的recall_score intent :{}".format(recall_score(ys_intent_list, pre_id, average="macro")))
+                print("整体验证集上的recall_score intent :{}".format(
+                    recall_score(ys_intent_list, pre_id, average="macro")))
                 print("整体验证集上的f1 intent :{}".format(f1_score(ys_intent_list, pre_id, average="macro")))
 
                 sentences_acc = []
@@ -444,10 +489,11 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
                 "sentences sentences_overall_sklearn_90 :{}".format(sentences_overall_sklearn_90 / len(sentences_acc)))
 
             print("测试集合slot_f1: {},sklearn_slot_f1+O: {}, id_acc: {}, overall: {}".format(f1, f1_sklearn,
-                                                                                          accuracy_score(ys_intent_list,
-                                                                                                         pre_id),
-                                                                                          sentences_overall / len(
-                                                                                              sentences_acc)))
+                                                                                              accuracy_score(
+                                                                                                  ys_intent_list,
+                                                                                                  pre_id),
+                                                                                              sentences_overall / len(
+                                                                                                  sentences_acc)))
         else:
             print("测试集合slot_f1: {},sklearn_slot_f1+O: {}".format(f1, f1_sklearn))
 
@@ -463,22 +509,31 @@ if __name__ == "__main__":
     max_size = config.max_size
     device = config.device
 
-    atis_or_snip = True  # True = atis , False = snip
-    is_for_slot = True  # True is only train slot , False is jointly train
+    dataset_type = ["atis", "snips"]  # 0 = atis , 1 = snips
 
-    # 加载数据
-    if atis_or_snip:
-        datas_train, label_intent_train, label_slot_train = get_data(dataset="atis", type="train")
-        datas_valid, label_intent_valid, label_slot_valid = get_data(dataset="atis", type="valid")
-        datas_test, label_intent_test, label_slot_test = get_data(dataset="atis", type="test")
-    else:
-        datas_train, label_intent_train, label_slot_train = get_data(dataset="snips", type="train")
-        datas_valid, label_intent_valid, label_slot_valid = get_data(dataset="snips", type="valid")
-        datas_test, label_intent_test, label_slot_test = get_data(dataset="snips", type="test")
+    is_for_slot = True  # True is only train slot task, False is jointly train slot and intent tasks
 
-    # 构建词表
-    word_2_id, id_2_word, label_intent_2_id, id_2_label_intent, \
-    label_slot_2_id, id_2_label_slot = get_dict(datas_train, label_intent_train, label_slot_train)
+    # 加载数据集 load dataset
+    with open(config.data_pkl_file_path, "rb") as fp:
+        all_data = pickle.load(fp)
+
+    all_data = all_data[dataset_type[config.dataset_type_id]]
+    datas_train, label_intent_train, label_slot_train = all_data['train'][0], all_data['train'][1], all_data['train'][2]
+    datas_valid, label_intent_valid, label_slot_valid = all_data['valid'][0], all_data['valid'][1], all_data['valid'][2]
+    datas_test, label_intent_test, label_slot_test = all_data['test'][0], all_data['test'][1], all_data['test'][2]
+
+    # 加载词表
+    with open(config.data_vocab_dic_pkl_file_path, "rb") as fp:
+        all_vocab_data = pickle.load(fp)
+    all_vocab_dic = all_vocab_data[dataset_type[config.dataset_type_id]]
+
+    # 词表 及 label 相关 id对应信息
+    word_2_id = all_vocab_dic['vocab_dic']
+    id_2_word = all_vocab_dic['id_2_word']
+    label_intent_2_id = all_vocab_dic['label_intent_2_id']
+    id_2_label_intent = all_vocab_dic['id_2_label_intent']
+    label_slot_2_id = all_vocab_dic['label_slot_2_id']
+    id_2_label_slot = all_vocab_dic['id_2_label_slot']
 
     word_size = len(word_2_id)  # 词表len
     intent_label_size = len(label_intent_2_id)
@@ -486,21 +541,19 @@ if __name__ == "__main__":
 
     # data loader
     train_dataset = MyDatasetWordPiece(datas_train, label_intent_train, label_slot_train, word_2_id,
-                                       label_intent_2_id, label_slot_2_id, max_size,
-                                       bert=True)
+                                       label_intent_2_id, label_slot_2_id, max_size)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
                                   collate_fn=train_dataset.batch_data_process)
 
     dev_dataset = MyDatasetWordPiece(datas_valid, label_intent_valid, label_slot_valid, word_2_id,
-                                     label_intent_2_id, label_slot_2_id, max_size,
-                                     bert=True)
+                                     label_intent_2_id, label_slot_2_id, max_size)
     dev_dataloader = DataLoader(dev_dataset, batch_size=len(dev_dataset), shuffle=False,
                                 collate_fn=dev_dataset.batch_data_process)
 
     test_dataset = MyDatasetWordPiece(datas_test, label_intent_test, label_slot_test, word_2_id,
                                       label_intent_2_id,
                                       label_slot_2_id,
-                                      max_size, bert=True)
+                                      max_size)
     test_dataloader = DataLoader(test_dataset, batch_size=len(test_dataset), shuffle=False,
                                  collate_fn=test_dataset.batch_data_process)
 
@@ -511,10 +564,11 @@ if __name__ == "__main__":
     # model = MyBert(intent_label_size, slot_label_size)
     # model = MyBertMainWordPiece(intent_label_size, slot_label_size) # sub-words 加起来取平均
     # model = MyBertFirstWordPiece(intent_label_size, slot_label_size) # sub-words 只用第一个piece
+
     # model = MyBertAttnWordPiece(intent_label_size, slot_label_size)
     # model = MyBertAttnWordPieceCRF(intent_label_size, slot_label_size)
-    # model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
-    model = MyBertAttnBPWordPieceCRF(intent_label_size, slot_label_size)
+    model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
+    # model = MyBertAttnBPWordPieceCRF(intent_label_size, slot_label_size)
     train(model=model, train_dataloader=train_dataloader, valid_dataloader=dev_dataloader,
           test_dataloader=test_dataloader, device=device,
           batch_size=batch_size, num_epoch=epoch, lr=lr, optim='adamW', is_CRF=True, is_for_slot=is_for_slot)

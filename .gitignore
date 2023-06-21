@@ -1,7 +1,6 @@
 version_2
 .DS_Store
-data/chinese
-data/CAIS
+data/
 pretrain-model/bert
 __pycache__
 version_1/__pycache__
