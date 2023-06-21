@@ -75,7 +75,7 @@ class MyDatasetWordPiece(Dataset):
         masks = []  # attention pad mask
         masks_crf = []  # crf mask; 数据为true，PAD为False
         token_start_idxs = []  # wordpiece 首词下标
-        subword_lengths = []
+        subword_lengths = []  # 记录 sub-words wordpiece 长度
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -146,12 +146,12 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
         model.train()
         train_slot_f1 = 0
         train_id_acc = 0
-        all_slot_pre = []
-        all_slot_tag = []
-        all_id_pre = []
-        all_id_tag = []
-        sentences_acc = []
-        sentences_f1 = []
+        all_slot_pre = []  # slot pre
+        all_slot_tag = []  # slot y
+        all_id_pre = []  # id pre
+        all_id_tag = []  # id y
+        sentences_acc = []  # overall acc
+        sentences_f1 = []  # overall f1
 
         for batch in tqdm(train_dataloader, desc='训练'):
             xs, ys_intent, ys_slot, xs_len, masks, token_start_idxs, subword_lengths, masks_crf = batch
@@ -419,7 +419,6 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             # 丢掉 [CLS]
             res_sf = res_sf[:, 1:, ]
             ys_slot = ys_slot[:, 1:]
-
 
             if is_CRF:
                 pre_sf_list = model.crf.decode(pre_sf, masks_crf)

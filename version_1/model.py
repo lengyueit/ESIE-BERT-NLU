@@ -8,7 +8,6 @@ from torchcrf import CRF
 logging.set_verbosity_error()
 
 
-
 # Bert joint 取wordpiece的第一个，label不变
 class MyBertFirstWordPiece(nn.Module):
     def __init__(self, intent_label_size, slot_label_size):
@@ -48,12 +47,22 @@ class MyBertFirstWordPiece(nn.Module):
         return res_id, res_sf
 
 
+class IAA_Attn():
+    """
+    intention attention
+    """
+
+    def __init__(self):
+        pass
+
+    def forward(self):
+        pass
 
 
 # 注意力机制 SSA_Attn
-class SSA_Attn(nn.Module):
+class SAA_Attn(nn.Module):
     def __init__(self, hidden_dim):
-        super(SSA_Attn, self).__init__()
+        super(SAA_Attn, self).__init__()
         self.Wsq = nn.Linear(hidden_dim, hidden_dim)
         self.Wsk = nn.Linear(hidden_dim, hidden_dim)
         self.Wsv = nn.Linear(hidden_dim, hidden_dim)
@@ -86,7 +95,8 @@ class MyBertAttnBPWordPiece(nn.Module):
         self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
 
         # attention
-        self.wordpiece_attention = SSA_Attn(config.bert_hidden_state_size)
+        self.wordpiece_attention = SAA_Attn(config.bert_hidden_state_size)
+        self.intent_attention = IAA_Attn(config.bert_hidden_state_size)
 
         self.linear_id = nn.Linear(config.bert_hidden_state_size, intent_label_size)
         self.linear_slot = nn.Linear(config.bert_hidden_state_size, slot_label_size)
