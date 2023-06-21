@@ -520,7 +520,7 @@ if __name__ == "__main__":
 
     dataset_type = ["atis", "snips"]  # 0 = atis , 1 = snips
 
-    is_for_slot = False  # True is only train slot task, False is jointly train slot and intent tasks
+    is_for_slot = config.is_for_slot  # True is only train slot task, False is jointly train slot and intent tasks
 
     # 加载数据集 load dataset
     with open(config.data_pkl_file_path, "rb") as fp:

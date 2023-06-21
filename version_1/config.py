@@ -12,6 +12,7 @@ lr = 0.00001
 epoch = 10
 dataset_type_id = 0  # 0 atis; 1 snips
 is_CRF = False
+is_for_slot = True
 
 # model para
 hidden_num = 128
