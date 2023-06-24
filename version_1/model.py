@@ -159,7 +159,7 @@ class MyBertAttnBPWordPiece(nn.Module):
         slot_joint_intent_wordpiece = h_intent.repeat(1, bert_res_main_wordpiece.shape[1], 1) + bert_res_main_wordpiece
 
         # predict id and slot
-        res_id = self.linear_id(h_intent)
+        res_id = self.linear_id(h_intent.squeeze(1))
         res_sf = self.linear_slot(slot_joint_intent_wordpiece)
 
         return res_id, res_sf

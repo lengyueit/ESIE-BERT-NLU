@@ -1,7 +1,8 @@
 version_2
 .DS_Store
 data/
-pretrain-model/bert
 __pycache__
 version_1/__pycache__
 pretrain-model
+*/__pycache__/*
+version_1/__pycache__/model.cpython-36.pycgi
