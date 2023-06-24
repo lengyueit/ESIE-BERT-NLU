@@ -26,7 +26,7 @@ class MyDatasetWordPiece(Dataset):
         self.max_size = max_size  # 单句最大长度
 
         self.tokenizer = BertTokenizer.from_pretrained(
-            "../pretrain-model/bert/bert-base-uncased/vocab.txt")
+            "../pretrain-model/bert/bert-base-uncased/bert-base-uncased-vocab.txt")
         # self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
         # bert 特殊字符
@@ -420,7 +420,7 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
             # 评估 slot
             sentences_f1 = []  # slot f1
-            sentences_f1_sklearn = [] # slot f1
+            sentences_f1_sklearn = []  # slot f1
             all_pre = []
             all_tag = []
             all_pre_sklearn = []
@@ -576,19 +576,12 @@ if __name__ == "__main__":
     test_dataloader = DataLoader(test_dataset, batch_size=len(test_dataset), shuffle=False,
                                  collate_fn=test_dataset.batch_data_process)
 
-    # model
-    # model = MyLstm(word_size, word_embedding, hidden_num, intent_label_size, slot_label_size, word_2_id["<PAD>"])
-    # model = MyRNN(word_size, word_embedding, hidden_num, intent_label_size, slot_label_size, word_2_id["<PAD>"])
-    # model = MyGRU(word_size, word_embedding, hidden_num, intent_label_size, slot_label_size, word_2_id["<PAD>"])
-    # model = MyBert(intent_label_size, slot_label_size)
-    # model = MyBertMainWordPiece(intent_label_size, slot_label_size) # sub-words 加起来取平均
-    model = MyBertFirstWordPiece(intent_label_size, slot_label_size)  # sub-words 只用第一个piece
+    # model = MyBertFirstWordPiece(intent_label_size, slot_label_size)  # sub-words 只用第一个piece
 
-    # model = MyBertAttnWordPiece(intent_label_size, slot_label_size)
-    # model = MyBertAttnWordPieceCRF(intent_label_size, slot_label_size)
-
-    # model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
+    model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
+    
     # model = MyBertAttnBPWordPieceCRF(intent_label_size, slot_label_size)
     train(model=model, train_dataloader=train_dataloader, valid_dataloader=dev_dataloader,
           test_dataloader=test_dataloader, device=device,
-          batch_size=batch_size, num_epoch=epoch, lr=lr, optim='adamW', is_CRF=is_CRF, is_for_slot=is_for_slot)
+          batch_size=batch_size, num_epoch=epoch, lr=lr, optim='adamW',
+          is_CRF=is_CRF, is_for_slot=is_for_slot)
