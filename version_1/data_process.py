@@ -130,8 +130,10 @@ def get_dict(all_data):
         id_2_label_slot = sorted(list(id_2_label_slot))
 
         label_slot_2_id = {word_count: idx for idx, word_count in enumerate(id_2_label_slot)}
-        label_slot_2_id.update({config.UNK: len(label_slot_2_id), config.PAD: len(label_slot_2_id) + 1})
-        id_2_label_slot.append(config.UNK)
+        # label_slot_2_id.update({config.UNK: len(label_slot_2_id), config.PAD: len(label_slot_2_id) + 1})
+        # id_2_label_slot.append(config.UNK)
+        # id_2_label_slot.append(config.PAD)
+        label_slot_2_id.update({config.PAD: len(label_slot_2_id)})
         id_2_label_slot.append(config.PAD)
 
         # dict_result[cur_type] = vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot

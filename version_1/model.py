@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import config
-from transformers import BertModel, logging
+from transformers import BertModel, AutoModel, logging
 from torchcrf import CRF
 
 logging.set_verbosity_error()
@@ -17,7 +17,7 @@ class MyBertFirstWordPiece(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # bert + 冻结参数
-        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
+        self.pretrain_model = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
         # for name, param in self.bert.named_parameters():
         #     param.requires_grad = False
 
@@ -27,10 +27,10 @@ class MyBertFirstWordPiece(nn.Module):
         self.cross_loss_fn = nn.CrossEntropyLoss()
 
     def forward(self, xs, masks, token_start_idxs, _, __):
-        bert_res = self.bert(xs, attention_mask=masks)
+        pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
 
-        res_all = bert_res[0]
-        res = bert_res[1]  # [CLS]
+        res_all = pretrain_model_res[0]
+        res = pretrain_model_res[1]  # [CLS]
 
         # intent d
         res_id = self.linear_id(res)
@@ -113,8 +113,9 @@ class MyBertAttnBPWordPiece(nn.Module):
     def __init__(self, intent_label_size, slot_label_size):
         super(MyBertAttnBPWordPiece, self).__init__()
 
-        # bert
-        self.bert = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
+        # pretrain_model
+        # self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
+        self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-large-uncased/")
 
         # attention
         self.wordpiece_attention = SAA_Attn(config.bert_hidden_state_size)
@@ -128,10 +129,10 @@ class MyBertAttnBPWordPiece(nn.Module):
     def forward(self, xs, masks, token_start_idxs, subword_lengths, is_for_slot=None):
         batch_size, _ = xs.shape
 
-        bert_res = self.bert(xs, attention_mask=masks)
+        pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
 
-        res_all = bert_res[0]
-        res = bert_res[1]  # [CLS]
+        res_all = pretrain_model_res[0]
+        res = pretrain_model_res[1]  # [CLS]
 
         # slot SAA, wordpiece 做attention操作
         bert_res_main_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),

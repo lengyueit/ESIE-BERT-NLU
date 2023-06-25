@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from model import *
@@ -8,7 +10,7 @@ import pickle
 from tqdm import tqdm
 import warnings
 import config
-from transformers import BertTokenizer
+from transformers import BertTokenizer, AutoTokenizer
 import numpy as np
 
 warnings.filterwarnings("ignore")
@@ -25,9 +27,10 @@ class MyDatasetWordPiece(Dataset):
         self.label_slot_2_id = label_slot_2_id  # slot label表
         self.max_size = max_size  # 单句最大长度
 
+        # self.tokenizer = BertTokenizer.from_pretrained("../pretrain-model/bert/bert-base-uncased/bert-base-uncased-vocab.txt")
         self.tokenizer = BertTokenizer.from_pretrained(
-            "../pretrain-model/bert/bert-base-uncased/bert-base-uncased-vocab.txt")
-        # self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+            os.path.join("..", "pretrain-model", "bert", "bert-base-uncased", "vocab.txt"))
+        # self.tokenizer = AutoTokenizer.from_pretrained("../pretrain-model/bert/bert-base-uncased/vocab.txt")
 
         # bert 特殊字符
         self.PAD, self.CLS, self.SEP = '[PAD]', '[CLS]', '[SEP]'
@@ -579,7 +582,7 @@ if __name__ == "__main__":
     # model = MyBertFirstWordPiece(intent_label_size, slot_label_size)  # sub-words 只用第一个piece
 
     model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
-    
+
     # model = MyBertAttnBPWordPieceCRF(intent_label_size, slot_label_size)
     train(model=model, train_dataloader=train_dataloader, valid_dataloader=dev_dataloader,
           test_dataloader=test_dataloader, device=device,

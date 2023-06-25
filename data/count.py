@@ -15,7 +15,7 @@ def get_data(dataset, type):
 
 
 if __name__ == "__main__":
-    tokenizer = BertTokenizer.from_pretrained("../pretrain-model/bert/bert-base-uncased/bert-base-uncased-vocab.txt")
+    tokenizer = BertTokenizer.from_pretrained("../pretrain-model/bert/bert-base-uncased/vocab.txt")
 
     atis_or_snip = True  # True = atis , False = snip
 
