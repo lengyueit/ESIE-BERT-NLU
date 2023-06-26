@@ -80,7 +80,7 @@ class MyDatasetWordPiece(Dataset):
         token_start_idxs = []  # wordpiece 首词下标
         subword_lengths = []  # 记录 sub-words wordpiece 长度
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = config.device
 
         for x, y_intent, y_slot, cur_len, token_start_idx, subword_length in batch_datas:
             xs.append(x)
@@ -147,14 +147,6 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
         # 训练开始
         model.train()
-        train_slot_f1 = 0
-        train_id_acc = 0
-        all_slot_pre = []  # slot pre
-        all_slot_tag = []  # slot y
-        all_id_pre = []  # id pre
-        all_id_tag = []  # id y
-        sentences_acc = []  # overall id acc
-        sentences_f1 = []  # overall slot f1
 
         for batch in tqdm(train_dataloader, desc='训练'):
             xs, ys_intent, ys_slot, xs_len, masks, token_start_idxs, subword_lengths, masks_crf = batch
@@ -192,44 +184,54 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             loss.backward()
             optimizer.step()
 
-            if is_for_slot == False:
-                # train jointly
-                res_id_list = torch.argmax(res_id, dim=-1).detach().cpu().numpy().tolist()
-                pre_sf_list = torch.argmax(res_sf, dim=-1).detach().cpu().numpy().tolist()
-                ys_slot_list = ys_slot.cpu().numpy().tolist()
+            # 评估
+            train_id_acc = 0
+            train_slot_f1 = 0
+
+            all_id_pre = []  # id pre
+            all_id_tag = []  # id y
+            sentences_acc = []  # overall id acc
+
+            all_slot_pre = []  # slot pre
+            all_slot_tag = []  # slot y
+            sentences_f1 = []  # overall slot f1
+
+            if is_for_slot == False:  # train jointly
+                # intent d
+                pre_id_list = torch.argmax(res_id, dim=-1).detach().cpu().numpy().tolist()
                 ys_intent_list = ys_intent.cpu().numpy().tolist()
-                xs_len = xs_len.cpu().numpy().tolist()
 
                 # 计算 id acc
-                all_id_pre += res_id_list
+                all_id_pre += pre_id_list
                 all_id_tag += ys_intent_list
 
-                for one_intent, one_pre in zip(ys_intent_list, res_id_list):
+                for one_intent, one_pre in zip(ys_intent_list, pre_id_list):
                     sentences_acc.append(one_intent == one_pre)
-            else:
-                # just slot
-                pre_sf_list = torch.argmax(res_sf, dim=-1).detach().cpu().numpy().tolist()
-                ys_slot_list = ys_slot.cpu().numpy().tolist()
-                xs_len = xs_len.cpu().numpy().tolist()
+
+            # slot f1
+            pre_sf_list = torch.argmax(res_sf, dim=-1).detach().cpu().numpy().tolist()
+            ys_slot_list = ys_slot.cpu().numpy().tolist()
+            xs_len = xs_len.cpu().numpy().tolist()
 
             # 计算sf f1
             if is_CRF:
                 pre_sf_list = model.crf.decode(res_sf, masks_crf)
 
+            # 评估slot f1 不要pad
             for one_pre, one_tag, one_len in zip(pre_sf_list, ys_slot_list, xs_len):
                 # if is_CRF is False:
                 #     one_pre = one_pre[1:one_len + 1]
                 # one_tag = one_tag[1:one_len + 1]
 
-                one_pre = [id_2_label_slot[i] for i in one_pre]
-                one_tag = [id_2_label_slot[i] for i in one_tag]
+                one_pre = [id_2_label_slot[i] for i in one_pre[:one_len]]
+                one_tag = [id_2_label_slot[i] for i in one_tag[:one_len]]
 
                 all_slot_pre.append(one_pre)
                 all_slot_tag.append(one_tag)
                 # 评估 sentences
                 sentences_f1.append(seq_f1_score([one_pre], [one_tag]))
+            # break
 
-        # break
         # 评估 overall
         if is_for_slot == False:
             # joint
@@ -249,6 +251,9 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             # only slot
             print("epoch: {}, Loss: {}, slot_f1: {}".format(epoch + 1, loss.item(),
                                                             seq_f1_score(all_slot_tag, all_slot_pre)))
+
+        # break
+
 
         # train_id_acc_list.append(train_id_acc / len(train_dataloader))
         # train_slot_f1_list.append(train_slot_f1 / len(train_dataloader))
@@ -391,21 +396,14 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             # forward
             pre_id, pre_sf = model(xs, masks, token_start_idxs, subword_lengths, is_for_slot)
 
-            # 丢掉 [CLS]
-            res_sf = res_sf[:, 1:, ]
-            ys_slot = ys_slot[:, 1:]
-
             if is_for_slot == False:
                 # train jointly
                 pre_id = torch.argmax(pre_id, dim=-1).detach().cpu().numpy().tolist()
                 ys_intent_list = ys_intent.cpu().numpy().tolist()
 
-            pre_sf_list = torch.argmax(pre_sf, dim=-1).detach().cpu().numpy().tolist()
-            ys_slot_list = ys_slot.cpu().numpy().tolist()
-            xs_len = xs_len.cpu().numpy().tolist()
-
+            # 评估 id
             if is_for_slot == False:
-                # 评估 id
+                print("---------------------------------ID classification ---------------------------------")
                 print("整体验证集上的acc intent :{}".format(accuracy_score(ys_intent_list, pre_id)))
                 print("整体验证集上的precision_score intent :{}".format(
                     precision_score(ys_intent_list, pre_id, average="macro")))
@@ -413,7 +411,6 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
                     recall_score(ys_intent_list, pre_id, average="macro")))
                 print("整体验证集上的f1 intent :{}".format(f1_score(ys_intent_list, pre_id, average="macro")))
 
-                print("---------------------------------ID classification ---------------------------------")
                 print(classification_report(ys_intent_list, pre_id))
                 print("---------------------------------ID classification ---------------------------------")
 
@@ -421,17 +418,24 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
                 for one_intent, one_pre in zip(ys_intent_list, pre_id):
                     sentences_acc.append(one_intent == one_pre)
 
+            # 丢掉 [CLS]
+            pre_sf = pre_sf[:, 1:, ]
+            ys_slot = ys_slot[:, 1:]
+
+            # slot f1
+            pre_sf_list = torch.argmax(pre_sf, dim=-1).detach().cpu().numpy().tolist()
+            ys_slot_list = ys_slot.cpu().numpy().tolist()
+            xs_len = xs_len.cpu().numpy().tolist()
+
             # 评估 slot
             sentences_f1 = []  # slot f1
             sentences_f1_sklearn = []  # slot f1
+
             all_pre = []
             all_tag = []
             all_pre_sklearn = []
             all_tag_sklearn = []
 
-            # 丢掉 [CLS]
-            res_sf = res_sf[:, 1:, ]
-            ys_slot = ys_slot[:, 1:]
 
             if is_CRF:
                 pre_sf_list = model.crf.decode(pre_sf, masks_crf)
@@ -443,15 +447,15 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
                 # one_tag = one_tag[1:one_len + 1]
 
                 # sklearn
-                all_pre_sklearn += one_pre
-                all_tag_sklearn += one_tag
+                all_pre_sklearn += one_pre[:one_len]
+                all_tag_sklearn += one_tag[:one_len]
 
                 # 评估 sklearn sentences
                 sentences_f1_sklearn.append(f1_score(one_pre, one_tag, average='micro'))
 
                 # seqveal
-                one_pre = [id_2_label_slot[i] for i in one_pre]
-                one_tag = [id_2_label_slot[i] for i in one_tag]
+                one_pre = [id_2_label_slot[i] for i in one_pre[:one_len]]
+                one_tag = [id_2_label_slot[i] for i in one_tag[:one_len]]
 
                 all_pre.append(one_pre)
                 all_tag.append(one_tag)
@@ -530,16 +534,14 @@ if __name__ == "__main__":
     max_size = config.max_size
     device = config.device
     is_CRF = config.is_CRF
-
-    dataset_type = ["atis", "snips"]  # 0 = atis , 1 = snips
-
     is_for_slot = config.is_for_slot  # True is only train slot task, False is jointly train slot and intent tasks
 
     # 加载数据集 load dataset
     with open(config.data_pkl_file_path, "rb") as fp:
         all_data = pickle.load(fp)
 
-    all_data = all_data[dataset_type[config.dataset_type_id]]
+    print("current training {} dataset".format(config.dataset))
+    all_data = all_data[config.dataset]
     datas_train, label_intent_train, label_slot_train = all_data['train'][0], all_data['train'][1], all_data['train'][2]
     datas_valid, label_intent_valid, label_slot_valid = all_data['valid'][0], all_data['valid'][1], all_data['valid'][2]
     datas_test, label_intent_test, label_slot_test = all_data['test'][0], all_data['test'][1], all_data['test'][2]
@@ -547,7 +549,7 @@ if __name__ == "__main__":
     # 加载词表
     with open(config.data_vocab_dic_pkl_file_path, "rb") as fp:
         all_vocab_data = pickle.load(fp)
-    all_vocab_dic = all_vocab_data[dataset_type[config.dataset_type_id]]
+    all_vocab_dic = all_vocab_data[config.dataset]
 
     # 词表 及 label 相关 id对应信息
     word_2_id = all_vocab_dic['vocab_dic']
@@ -578,13 +580,19 @@ if __name__ == "__main__":
                                       max_size)
     test_dataloader = DataLoader(test_dataset, batch_size=len(test_dataset), shuffle=False,
                                  collate_fn=test_dataset.batch_data_process)
+    # test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False,
+    #                              collate_fn=test_dataset.batch_data_process)
 
-    # model = MyBertFirstWordPiece(intent_label_size, slot_label_size)  # sub-words 只用第一个piece
 
-    model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
+    # 模型定义
+    model = MyBertFirstWordPiece(intent_label_size, slot_label_size)  # sub-words 只用第一个piece
+
+    # model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
 
     # model = MyBertAttnBPWordPieceCRF(intent_label_size, slot_label_size)
+
+    # trainer
     train(model=model, train_dataloader=train_dataloader, valid_dataloader=dev_dataloader,
           test_dataloader=test_dataloader, device=device,
-          batch_size=batch_size, num_epoch=epoch, lr=lr, optim='adamW',
+          batch_size=batch_size, num_epoch=epoch, lr=lr, optim=config.optim,
           is_CRF=is_CRF, is_for_slot=is_for_slot)

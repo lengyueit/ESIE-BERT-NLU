@@ -7,21 +7,25 @@ UNK = "<UNK>"
 PAD = "<PAD>"
 
 # train
-batch_size = 16
-lr = 0.00001
-epoch = 10
-dataset_type_id = 0  # 0 atis; 1 snips
+batch_size = 5
+lr = 0.0001
+epoch = 30
 is_CRF = False
 is_for_slot = False
-model_name = ['bert-base','bert-large  ']
+optim = "adam"
+
+dataset_list = ['atis', 'snips']
+dataset = 'atis'
+model_name_list = ['bert-base', 'bert-large', 'gpt1', 't5-base', 't5-large']
+model_name = 'gpt-base'
 
 # model para
 hidden_num = 128
 word_embedding = 64
 max_size = 50
 
-bert_hidden_state_size = 768
+bert_hidden_state_size = 768 if 'base' in model_name else 1024
 
 import torch
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cuda:0" if torch.cuda.is_available() else "cpu"

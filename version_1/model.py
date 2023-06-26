@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import config
-from transformers import BertModel, AutoModel, logging
+from transformers import BertModel, AutoModel, logging, GPT2LMHeadModel, OpenAIGPTModel
 from torchcrf import CRF
 
 logging.set_verbosity_error()
@@ -14,36 +14,68 @@ class MyBertFirstWordPiece(nn.Module):
         super(MyBertFirstWordPiece, self).__init__()
 
         # 定义网络层
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = config.device
 
-        # bert + 冻结参数
-        self.pretrain_model = BertModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
-        # for name, param in self.bert.named_parameters():
-        #     param.requires_grad = False
+        # pretrain_model
+        if config.model_name == "bert-base":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
+        elif config.model_name == "bert-large":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-large-uncased/")
+        elif config.model_name == "gpt-base":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt2-base/")
+        elif config.model_name == "gpt-large":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt2-large/")
 
         self.linear_id = nn.Linear(config.bert_hidden_state_size, intent_label_size)
         self.linear_slot = nn.Linear(config.bert_hidden_state_size, slot_label_size)
 
         self.cross_loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self, xs, masks, token_start_idxs, _, __):
-        pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
+    if 'bert' in config.model_name:
+        def forward(self, xs, masks, token_start_idxs, _, __):
+            batch_size, _ = xs.shape
 
-        res_all = pretrain_model_res[0]
-        res = pretrain_model_res[1]  # [CLS]
+            pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
 
-        # intent d
-        res_id = self.linear_id(res)
+            res_all = pretrain_model_res[0]
+            res = pretrain_model_res[1]  # [CLS]
 
-        # # slot f, wordpiece 只取首词
-        bert_res_first_wordpiece = torch.zeros((xs.shape[0], 51, 768), device=self.device)
-        for i, one_batch in enumerate(res_all):
-            cur_index_tensor = torch.index_select(one_batch, dim=0, index=token_start_idxs[i])
-            bert_res_first_wordpiece[i] = cur_index_tensor
+            # intent d
+            res_id = self.linear_id(res)
 
-        res_sf = self.linear_slot(bert_res_first_wordpiece)
+            # slot f, wordpiece 只取首词
+            bert_res_first_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),
+                                                   device=self.device)
+            for i, one_batch in enumerate(res_all):
+                cur_index_tensor = torch.index_select(one_batch, dim=0, index=token_start_idxs[i])
+                bert_res_first_wordpiece[i] = cur_index_tensor
 
-        return res_id, res_sf
+            res_sf = self.linear_slot(bert_res_first_wordpiece)
+
+            return res_id, res_sf
+    elif 'gpt' in config.model_name:
+        # todo gpt 架构
+        def forward(self, xs, masks, token_start_idxs, _, __):
+            batch_size, _ = xs.shape
+
+            pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
+
+            last_hidden_layer_all = pretrain_model_res[0]
+            last_hidden_layer_last_word = last_hidden_layer_all[:, -1, :] # [CLS]
+
+            # intent d
+            res_id = self.linear_id(last_hidden_layer_last_word)
+
+            # slot f, wordpiece 只取首词
+            bert_res_first_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),
+                                                   device=self.device)
+            for i, one_batch in enumerate(last_hidden_layer_all):
+                cur_index_tensor = torch.index_select(one_batch, dim=0, index=token_start_idxs[i])
+                bert_res_first_wordpiece[i] = cur_index_tensor
+
+            res_sf = self.linear_slot(bert_res_first_wordpiece)
+
+            return res_id, res_sf
 
 
 class IAA_Attn(nn.Module):
@@ -114,8 +146,10 @@ class MyBertAttnBPWordPiece(nn.Module):
         super(MyBertAttnBPWordPiece, self).__init__()
 
         # pretrain_model
-        # self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
-        self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-large-uncased/")
+        if config.model_name == "bert-base":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
+        elif config.model_name == "bert-large":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-large-uncased/")
 
         # attention
         self.wordpiece_attention = SAA_Attn(config.bert_hidden_state_size)
