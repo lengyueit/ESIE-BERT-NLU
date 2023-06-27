@@ -16,8 +16,8 @@ optim = "adam"
 
 dataset_list = ['atis', 'snips']
 dataset = 'atis'
-model_name_list = ['bert-base', 'bert-large', 'gpt1', 't5-base', 't5-large']
-model_name = 'gpt-base'
+model_name_list = ['bert-base', 'bert-large', 'bert-multilingual', 'gpt1', 'gpt2-base', 'gpt2-large', 't5-base', 't5-large']
+model_name = 'bert-multilingual'
 
 # model para
 hidden_num = 128

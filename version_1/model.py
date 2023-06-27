@@ -21,9 +21,11 @@ class MyBertFirstWordPiece(nn.Module):
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
         elif config.model_name == "bert-large":
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-large-uncased/")
-        elif config.model_name == "gpt-base":
+        elif config.model_name == "gpt1":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt1/")
+        elif config.model_name == "gpt2-base":
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt2-base/")
-        elif config.model_name == "gpt-large":
+        elif config.model_name == "gpt2-large":
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt2-large/")
 
         self.linear_id = nn.Linear(config.bert_hidden_state_size, intent_label_size)
@@ -54,14 +56,13 @@ class MyBertFirstWordPiece(nn.Module):
 
             return res_id, res_sf
     elif 'gpt' in config.model_name:
-        # todo gpt 架构
         def forward(self, xs, masks, token_start_idxs, _, __):
             batch_size, _ = xs.shape
 
             pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
 
-            last_hidden_layer_all = pretrain_model_res[0]
-            last_hidden_layer_last_word = last_hidden_layer_all[:, -1, :] # [CLS]
+            last_hidden_states = pretrain_model_res.last_hidden_state
+            last_hidden_layer_last_word = last_hidden_states[:, -1, :]  # [CLS]
 
             # intent d
             res_id = self.linear_id(last_hidden_layer_last_word)
@@ -69,7 +70,7 @@ class MyBertFirstWordPiece(nn.Module):
             # slot f, wordpiece 只取首词
             bert_res_first_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),
                                                    device=self.device)
-            for i, one_batch in enumerate(last_hidden_layer_all):
+            for i, one_batch in enumerate(last_hidden_states):
                 cur_index_tensor = torch.index_select(one_batch, dim=0, index=token_start_idxs[i])
                 bert_res_first_wordpiece[i] = cur_index_tensor
 
@@ -150,6 +151,12 @@ class MyBertAttnBPWordPiece(nn.Module):
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
         elif config.model_name == "bert-large":
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-large-uncased/")
+        elif config.model_name == "gpt1":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt1/")
+        elif config.model_name == "gpt2-base":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt2-base/")
+        elif config.model_name == "gpt2-large":
+            self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt2-large/")
 
         # attention
         self.wordpiece_attention = SAA_Attn(config.bert_hidden_state_size)
@@ -160,44 +167,86 @@ class MyBertAttnBPWordPiece(nn.Module):
 
         self.cross_loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self, xs, masks, token_start_idxs, subword_lengths, is_for_slot=None):
-        batch_size, _ = xs.shape
+    if 'bert' in config.model_name:
+        def forward(self, xs, masks, token_start_idxs, subword_lengths, is_for_slot=None):
+            batch_size, _ = xs.shape
 
-        pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
+            pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
 
-        res_all = pretrain_model_res[0]
-        res = pretrain_model_res[1]  # [CLS]
+            res_all = pretrain_model_res[0]
+            res = pretrain_model_res[1]  # [CLS]
 
-        # slot SAA, wordpiece 做attention操作
-        bert_res_main_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),
-                                              device=config.device)
-        # each batch 串行操作
-        for i, one_batch in enumerate(res_all):
-            for index, (start, lens) in enumerate(zip(token_start_idxs[i], subword_lengths[i])):
+            # slot SAA, wordpiece 做attention操作
+            bert_res_main_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),
+                                                  device=config.device)
+            # each batch 串行操作
+            for i, one_batch in enumerate(res_all):
+                for index, (start, lens) in enumerate(zip(token_start_idxs[i], subword_lengths[i])):
 
-                if lens == 1:
-                    word = one_batch[start, :]
-                else:
-                    # 选出指定word的 subword 对应的tensor
-                    target_index = torch.range(start, start + lens, device=config.device, dtype=torch.int)
-                    cur_index_tensor = torch.index_select(one_batch, dim=0, index=target_index)
+                    if lens == 1:
+                        word = one_batch[start, :]
+                    else:
+                        # 选出指定word的 subword 对应的tensor
+                        target_index = torch.range(start, start + lens, device=config.device, dtype=torch.int)
+                        cur_index_tensor = torch.index_select(one_batch, dim=0, index=target_index)
 
-                    # 对wordPiece首词做attn
-                    attention_word = self.wordpiece_attention(cur_index_tensor[0], cur_index_tensor)
-                    word = attention_word
-                bert_res_main_wordpiece[i][index] = word
+                        # 对wordPiece首词做attn
+                        attention_word = self.wordpiece_attention(cur_index_tensor[0], cur_index_tensor)
+                        word = attention_word
+                    bert_res_main_wordpiece[i][index] = word
 
-        # intent IAA
-        h_intent = self.intent_attention(res, bert_res_main_wordpiece)
+            # intent IAA
+            h_intent = self.intent_attention(res, bert_res_main_wordpiece)
 
-        # slot jointly intent feature
-        slot_joint_intent_wordpiece = h_intent.repeat(1, bert_res_main_wordpiece.shape[1], 1) + bert_res_main_wordpiece
+            # slot jointly intent feature
+            slot_joint_intent_wordpiece = h_intent.repeat(1, bert_res_main_wordpiece.shape[1], 1) + bert_res_main_wordpiece
 
-        # predict id and slot
-        res_id = self.linear_id(h_intent.squeeze(1))
-        res_sf = self.linear_slot(slot_joint_intent_wordpiece)
+            # predict id and slot
+            res_id = self.linear_id(h_intent.squeeze(1))
+            res_sf = self.linear_slot(slot_joint_intent_wordpiece)
 
-        return res_id, res_sf
+            return res_id, res_sf
+
+    elif 'gpt' in config.model_name:
+        def forward(self, xs, masks, token_start_idxs, subword_lengths, is_for_slot=None):
+            batch_size, _ = xs.shape
+
+            pretrain_model_res = self.pretrain_model(xs, attention_mask=masks)
+
+            last_hidden_states = pretrain_model_res.last_hidden_state
+            last_hidden_layer_last_word = last_hidden_states[:, -1, :]  # [CLS]
+
+            # slot SAA, wordpiece 做attention操作
+            bert_res_main_wordpiece = torch.zeros((batch_size, config.max_size + 1, config.bert_hidden_state_size),
+                                                  device=config.device)
+            # each batch 串行操作
+            for i, one_batch in enumerate(last_hidden_states):
+                for index, (start, lens) in enumerate(zip(token_start_idxs[i], subword_lengths[i])):
+
+                    if lens == 1:
+                        word = one_batch[start, :]
+                    else:
+                        # 选出指定word的 subword 对应的tensor
+                        target_index = torch.range(start, start + lens, device=config.device, dtype=torch.int)
+                        cur_index_tensor = torch.index_select(one_batch, dim=0, index=target_index)
+
+                        # 对wordPiece首词做attn
+                        attention_word = self.wordpiece_attention(cur_index_tensor[0], cur_index_tensor)
+                        word = attention_word
+                    bert_res_main_wordpiece[i][index] = word
+
+            # intent IAA
+            h_intent = self.intent_attention(last_hidden_layer_last_word, bert_res_main_wordpiece)
+
+            # slot jointly intent feature
+            slot_joint_intent_wordpiece = h_intent.repeat(1, bert_res_main_wordpiece.shape[1],
+                                                          1) + bert_res_main_wordpiece
+
+            # predict id and slot
+            res_id = self.linear_id(h_intent.squeeze(1))
+            res_sf = self.linear_slot(slot_joint_intent_wordpiece)
+
+            return res_id, res_sf
 
 
 # Bert joint EISE + CRF

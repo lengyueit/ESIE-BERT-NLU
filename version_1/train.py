@@ -10,7 +10,7 @@ import pickle
 from tqdm import tqdm
 import warnings
 import config
-from transformers import BertTokenizer, AutoTokenizer
+from transformers import AutoTokenizer
 import numpy as np
 
 warnings.filterwarnings("ignore")
@@ -27,10 +27,18 @@ class MyDatasetWordPiece(Dataset):
         self.label_slot_2_id = label_slot_2_id  # slot label表
         self.max_size = max_size  # 单句最大长度
 
-        # self.tokenizer = BertTokenizer.from_pretrained("../pretrain-model/bert/bert-base-uncased/bert-base-uncased-vocab.txt")
-        self.tokenizer = BertTokenizer.from_pretrained(
-            os.path.join("..", "pretrain-model", "bert", "bert-base-uncased", "vocab.txt"))
-        # self.tokenizer = AutoTokenizer.from_pretrained("../pretrain-model/bert/bert-base-uncased/vocab.txt")
+        if "bert" in config.model_name and "multilingual" not in config.model_name:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                os.path.join("..", "pretrain-model", "bert", "bert-base-uncased"))
+        elif "multilingual" in config.model_name:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                os.path.join("..", "pretrain-model", "bert", "bert-base-multilingual-uncased"))
+        elif "gpt1" in config.model_name:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                os.path.join("..", "pretrain-model", "gpt", "gpt1"))
+        elif "gpt2" in config.model_name:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                os.path.join("..", "pretrain-model", "gpt", "gpt2-base"))
 
         # bert 特殊字符
         self.PAD, self.CLS, self.SEP = '[PAD]', '[CLS]', '[SEP]'
@@ -254,7 +262,6 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
         # break
 
-
         # train_id_acc_list.append(train_id_acc / len(train_dataloader))
         # train_slot_f1_list.append(train_slot_f1 / len(train_dataloader))
         # train_losses.append(loss.item())
@@ -436,7 +443,6 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             all_pre_sklearn = []
             all_tag_sklearn = []
 
-
             if is_CRF:
                 pre_sf_list = model.crf.decode(pre_sf, masks_crf)
 
@@ -582,7 +588,6 @@ if __name__ == "__main__":
                                  collate_fn=test_dataset.batch_data_process)
     # test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False,
     #                              collate_fn=test_dataset.batch_data_process)
-
 
     # 模型定义
     model = MyBertFirstWordPiece(intent_label_size, slot_label_size)  # sub-words 只用第一个piece
