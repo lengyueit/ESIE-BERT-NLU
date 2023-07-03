@@ -53,6 +53,7 @@ def data_save_pkl(save_file):
     :return:  none
     """
     data = {}
+    data['multi'] = {}
 
     # 加载数据
     datas_train_atis, label_intent_train_atis, label_slot_train_atis = get_data(file="../data/atis", data_type="train")
@@ -71,6 +72,35 @@ def data_save_pkl(save_file):
                      "valid": [datas_valid_snips, label_intent_valid_snips, label_slot_valid_snips],
                      "test": [datas_test_snips, label_intent_test_snips, label_slot_test_snips]}
 
+    # 多语言
+    datas_train_atis_multi_en, label_intent_train_atis_multi_en, label_slot_train_atis_multi_en = get_data(
+        file="../data/en-ph-atis/en",
+        data_type="train")
+    datas_valid_atis_multi_en, label_intent_valid_atis_multi_en, label_slot_valid_atis_multi_en = get_data(
+        file="../data/en-ph-atis/en", data_type="dev")
+    datas_test_atis_multi_en, label_intent_test_atis_multi_en, label_slot_test_atis_multi_en = get_data(
+        file="../data/en-ph-atis/en", data_type="test")
+
+    data['multi']['en'] = {
+        "train": [datas_train_atis_multi_en, label_intent_train_atis_multi_en, label_slot_train_atis_multi_en],
+        "valid": [datas_valid_atis_multi_en, label_intent_valid_atis_multi_en, label_slot_valid_atis_multi_en],
+        "test": [datas_test_atis_multi_en, label_intent_test_atis_multi_en, label_slot_test_atis_multi_en]}
+
+    datas_train_atis_multi_ph, label_intent_train_atis_multi_ph, label_slot_train_atis_multi_ph = get_data(
+        file="../data/en-ph-atis/ph",
+        data_type="train")
+    datas_valid_atis_multi_ph, label_intent_valid_atis_multi_ph, label_slot_valid_atis_multi_ph = get_data(
+        file="../data/en-ph-atis/ph",
+        data_type="dev")
+    datas_test_atis_multi_ph, label_intent_test_atis_multi_ph, label_slot_test_atis_multi_ph = get_data(
+        file="../data/en-ph-atis/ph",
+        data_type="test")
+
+    data['multi']['ph'] = {
+        "train": [datas_train_atis_multi_ph, label_intent_train_atis_multi_ph, label_slot_train_atis_multi_ph],
+        "valid": [datas_valid_atis_multi_ph, label_intent_valid_atis_multi_ph, label_slot_valid_atis_multi_ph],
+        "test": [datas_test_atis_multi_ph, label_intent_test_atis_multi_ph, label_slot_test_atis_multi_ph]}
+
     # 写入文件
     with open(save_file, 'wb') as f:
         pickle.dump(data, f)
@@ -83,8 +113,9 @@ def get_dict(all_data):
     :return: vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
     """
     dict_result = {}
+    dict_result["multi"] = {}
 
-    data_type = ['atis', 'snips']
+    data_type = ['atis', 'snips', 'multi-en', 'multi-ph']
     for cur_type in data_type:
         word_2_id = {}
         label_intent_2_id = {}
@@ -93,9 +124,15 @@ def get_dict(all_data):
         id_2_label_slot = set()
 
         # data   label_intent   label_slot
-        datas_train, label_intent_train, label_slot_train = all_data[cur_type]['train']
-        datas_valid, label_intent_valid, label_slot_valid = all_data[cur_type]['valid']
-        datas_test, label_intent_test, label_slot_test = all_data[cur_type]['test']
+        if "multi" not in cur_type:
+            datas_train, label_intent_train, label_slot_train = all_data[cur_type]['train']
+            datas_valid, label_intent_valid, label_slot_valid = all_data[cur_type]['valid']
+            datas_test, label_intent_test, label_slot_test = all_data[cur_type]['test']
+        else:
+            cur_type, cur_lingual = cur_type.split("-")
+            datas_train, label_intent_train, label_slot_train = all_data[cur_type][cur_lingual]['train']
+            datas_valid, label_intent_valid, label_slot_valid = all_data[cur_type][cur_lingual]['valid']
+            datas_test, label_intent_test, label_slot_test = all_data[cur_type][cur_lingual]['test']
 
         label_intent = set(label_intent_train + label_intent_valid + label_intent_test)
         label_slot = label_slot_train + label_slot_valid + label_slot_test
@@ -137,14 +174,24 @@ def get_dict(all_data):
         id_2_label_slot.append(config.PAD)
 
         # dict_result[cur_type] = vocab_dic, id_2_word, label_intent_2_id, id_2_label_intent, label_slot_2_id, id_2_label_slot
-        dict_result[cur_type] = {
-            "vocab_dic": vocab_dic,
-            "id_2_word": id_2_word,
-            "label_intent_2_id": label_intent_2_id,
-            "id_2_label_intent": id_2_label_intent,
-            "label_slot_2_id": label_slot_2_id,
-            "id_2_label_slot": id_2_label_slot,
-        }
+        if "multi" not in cur_type:
+            dict_result[cur_type] = {
+                "vocab_dic": vocab_dic,
+                "id_2_word": id_2_word,
+                "label_intent_2_id": label_intent_2_id,
+                "id_2_label_intent": id_2_label_intent,
+                "label_slot_2_id": label_slot_2_id,
+                "id_2_label_slot": id_2_label_slot,
+            }
+        else:
+            dict_result[cur_type][cur_lingual] = {
+                "vocab_dic": vocab_dic,
+                "id_2_word": id_2_word,
+                "label_intent_2_id": label_intent_2_id,
+                "id_2_label_intent": id_2_label_intent,
+                "label_slot_2_id": label_slot_2_id,
+                "id_2_label_slot": id_2_label_slot,
+            }
     return dict_result
 
 
@@ -165,15 +212,18 @@ def data_vocab_save_pkl(save_file):
 
 
 if __name__ == "__main__":
-    # 加载数据
+    # # 加载数据
     data_pkl_file_path = config.data_pkl_file_path
-    # if os.path.exists(data_pkl_file_path):
-    #     os.remove(data_pkl_file_path)
     data_save_pkl(data_pkl_file_path)
-
 
     # 加载词表
     data_vocab_dic_pkl_file_path = config.data_vocab_dic_pkl_file_path
-    # if os.path.exists(data_vocab_dic_pkl_file_path):
-    #     os.remove(data_vocab_dic_pkl_file_path)
     data_vocab_save_pkl(data_vocab_dic_pkl_file_path)
+
+    # 加载数据 多语言
+    # data_pkl_file_path = config.data_pkl_file_path_multi
+    # data_save_pkl(data_pkl_file_path)
+    #
+    # # 加载词表
+    # data_vocab_dic_pkl_file_path = config.data_vocab_dic_pkl_file_path_multi
+    # data_vocab_save_pkl(data_vocab_dic_pkl_file_path)

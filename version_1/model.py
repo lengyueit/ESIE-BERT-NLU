@@ -21,7 +21,7 @@ class MyBertFirstWordPiece(nn.Module):
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-base-uncased/")
         elif config.model_name == "bert-large":
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/bert/bert-large-uncased/")
-        elif config.model_name == "gpt1":
+        elif config.model_name == "gpt1-base":
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt1/")
         elif config.model_name == "gpt2-base":
             self.pretrain_model = AutoModel.from_pretrained("../pretrain-model/gpt/gpt2-base/")

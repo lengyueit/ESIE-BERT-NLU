@@ -3,29 +3,31 @@ import os
 # data
 data_pkl_file_path = os.path.join("..", "data", "data.pkl")
 data_vocab_dic_pkl_file_path = os.path.join("..", "data", "vocab.pkl")
+# data multi-lingual
+data_pkl_file_path_multi = os.path.join("..", "data", "data.pkl")
+data_vocab_dic_pkl_file_path_multi = os.path.join("..", "data", "vocab.pkl")
 UNK = "<UNK>"
 PAD = "<PAD>"
 
 # train
-batch_size = 5
+batch_size = 512
 lr = 0.0001
-epoch = 30
+epoch = 50
 is_CRF = False
 is_for_slot = False
-optim = "adam"
+optim = "sgd"
+beta = 0.1
 
-dataset_list = ['atis', 'snips']
-dataset = 'atis'
-model_name_list = ['bert-base', 'bert-large', 'bert-multilingual', 'gpt1', 'gpt2-base', 'gpt2-large', 't5-base', 't5-large']
-model_name = 'bert-multilingual'
+dataset_list = ['atis', 'snips', 'multi-en', 'multi-ph']
+dataset = 'multi-ph'
+model_name_list = ['bert-base', 'bert-large', 'bert-multilingual', 'gpt1-base', 'gpt2-base', 'gpt2-mid']
+model_name = 'bert-base'
 
 # model para
-hidden_num = 128
-word_embedding = 64
 max_size = 50
 
 bert_hidden_state_size = 768 if 'base' in model_name else 1024
 
 import torch
 
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
+device = "cuda:1" if torch.cuda.is_available() else "cpu"

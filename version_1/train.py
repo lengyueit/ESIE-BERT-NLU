@@ -187,7 +187,7 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
             if is_for_slot:
                 loss = loss_sf
             else:
-                loss = loss_id + loss_sf
+                loss = config.beta * loss_id + (1 - config.beta) * loss_sf
 
             loss.backward()
             optimizer.step()
@@ -501,7 +501,7 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
                 if one_intent and one_slot_f1 == 1.0:
                     sentences_overall += 1
 
-                if one_intent and one_slot_f1 >= 0.9:
+                if one_intent and one_slot_f1 >= 0.95:
                     sentences_overall_90 += 1
 
             sentences_overall_sklearn = 0
@@ -510,14 +510,14 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
                 if one_intent and one_slot_f1 == 1.0:
                     sentences_overall_sklearn += 1
 
-                if one_intent and one_slot_f1 >= 0.9:
+                if one_intent and one_slot_f1 >= 0.95:
                     sentences_overall_sklearn_90 += 1
 
             print("sentences overall :{}".format(sentences_overall / len(sentences_acc)))
-            print("sentences sentences_overall_90 :{}".format(sentences_overall_90 / len(sentences_acc)))
+            print("sentences sentences_overall_95 :{}".format(sentences_overall_90 / len(sentences_acc)))
             print("sentences overall_sklearn :{}".format(sentences_overall_sklearn / len(sentences_acc)))
             print(
-                "sentences sentences_overall_sklearn_90 :{}".format(sentences_overall_sklearn_90 / len(sentences_acc)))
+                "sentences sentences_overall_sklearn_95 :{}".format(sentences_overall_sklearn_90 / len(sentences_acc)))
 
             print("测试集合slot_f1: {},sklearn_slot_f1+O: {}, id_acc: {}, overall: {}".format(f1, f1_sklearn,
                                                                                               accuracy_score(
@@ -532,11 +532,10 @@ def train(model, train_dataloader, valid_dataloader, test_dataloader, device, ba
 
 
 if __name__ == "__main__":
+    # setting param
     batch_size = config.batch_size
     lr = config.lr
     epoch = config.epoch
-    hidden_num = config.hidden_num
-    word_embedding = config.word_embedding
     max_size = config.max_size
     device = config.device
     is_CRF = config.is_CRF
@@ -547,10 +546,17 @@ if __name__ == "__main__":
         all_data = pickle.load(fp)
 
     print("current training {} dataset".format(config.dataset))
-    all_data = all_data[config.dataset]
-    datas_train, label_intent_train, label_slot_train = all_data['train'][0], all_data['train'][1], all_data['train'][2]
-    datas_valid, label_intent_valid, label_slot_valid = all_data['valid'][0], all_data['valid'][1], all_data['valid'][2]
-    datas_test, label_intent_test, label_slot_test = all_data['test'][0], all_data['test'][1], all_data['test'][2]
+    if "multi" not in config.dataset:
+        all_data = all_data[config.dataset]
+        datas_train, label_intent_train, label_slot_train = all_data['train'][0], all_data['train'][1], all_data['train'][2]
+        datas_valid, label_intent_valid, label_slot_valid = all_data['valid'][0], all_data['valid'][1], all_data['valid'][2]
+        datas_test, label_intent_test, label_slot_test = all_data['test'][0], all_data['test'][1], all_data['test'][2]
+    else:
+        cur_type, cur_lingual = config.dataset.split("-")
+        all_data = all_data[cur_type][cur_lingual]
+        datas_train, label_intent_train, label_slot_train = all_data['train'][0], all_data['train'][1], all_data['train'][2]
+        datas_valid, label_intent_valid, label_slot_valid = all_data['valid'][0], all_data['valid'][1], all_data['valid'][2]
+        datas_test, label_intent_test, label_slot_test = all_data['test'][0], all_data['test'][1], all_data['test'][2]
 
     # 加载词表
     with open(config.data_vocab_dic_pkl_file_path, "rb") as fp:
@@ -595,6 +601,8 @@ if __name__ == "__main__":
     # model = MyBertAttnBPWordPiece(intent_label_size, slot_label_size)
 
     # model = MyBertAttnBPWordPieceCRF(intent_label_size, slot_label_size)
+
+    print("choose pre-training model: {}".format(config.model_name))
 
     # trainer
     train(model=model, train_dataloader=train_dataloader, valid_dataloader=dev_dataloader,

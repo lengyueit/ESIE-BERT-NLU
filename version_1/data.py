@@ -5,7 +5,8 @@ import numpy as np
 from transformers import BertTokenizer
 
 """
-todo this file is discarded
+this file is discarded
+
 dataset 
 """
 
