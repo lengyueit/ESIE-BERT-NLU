@@ -545,12 +545,19 @@ if __name__ == "__main__":
     with open(config.data_pkl_file_path, "rb") as fp:
         all_data = pickle.load(fp)
 
+    # 加载词表
+    with open(config.data_vocab_dic_pkl_file_path, "rb") as fp:
+        all_vocab_data = pickle.load(fp)
+
     print("current training {} dataset".format(config.dataset))
     if "multi" not in config.dataset:
         all_data = all_data[config.dataset]
         datas_train, label_intent_train, label_slot_train = all_data['train'][0], all_data['train'][1], all_data['train'][2]
         datas_valid, label_intent_valid, label_slot_valid = all_data['valid'][0], all_data['valid'][1], all_data['valid'][2]
         datas_test, label_intent_test, label_slot_test = all_data['test'][0], all_data['test'][1], all_data['test'][2]
+
+        all_vocab_dic = all_vocab_data[config.dataset]
+
     else:
         cur_type, cur_lingual = config.dataset.split("-")
         all_data = all_data[cur_type][cur_lingual]
@@ -558,10 +565,7 @@ if __name__ == "__main__":
         datas_valid, label_intent_valid, label_slot_valid = all_data['valid'][0], all_data['valid'][1], all_data['valid'][2]
         datas_test, label_intent_test, label_slot_test = all_data['test'][0], all_data['test'][1], all_data['test'][2]
 
-    # 加载词表
-    with open(config.data_vocab_dic_pkl_file_path, "rb") as fp:
-        all_vocab_data = pickle.load(fp)
-    all_vocab_dic = all_vocab_data[config.dataset]
+        all_vocab_dic = all_vocab_data[cur_type][cur_lingual]
 
     # 词表 及 label 相关 id对应信息
     word_2_id = all_vocab_dic['vocab_dic']
