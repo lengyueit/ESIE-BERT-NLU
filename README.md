@@ -11,8 +11,8 @@ pretrain model download url as following:
 
 ### BERT
 
-https://www.huggingface.co/bert-base-uncased \    768
-https://huggingface.co/bert-large-uncased \   1024
+https://www.huggingface.co/bert-base-uncased \
+https://huggingface.co/bert-large-uncased \
 https://www.huggingface.co/bert-base-multilingual-uncased
 
 ### gpt
