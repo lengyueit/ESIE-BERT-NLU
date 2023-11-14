@@ -8,7 +8,7 @@ Reasonably adjust the following parameters based on your own computational resou
 --batch_size = 128 \
 --lr = 5e-5 \
 --epoch = 10 \
---dataset_type_id = 0 \
+--dataset_type_id = 0 
 
 huggingface docx: \
 https://huggingface.co/docs/transformers/index
