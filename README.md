@@ -4,11 +4,11 @@
 python main.py
 ```
 
-Reasonably adjust the following parameters based on your own computational resources to control the model's computational load and parameter count. Here are some references:
---batch_size = 128
---lr = 5e-5
---epoch = 10
---dataset_type_id = 0
+Reasonably adjust the following parameters based on your own computational resources to control the model's computational load and parameter count. Here are some references: \
+--batch_size = 128 \
+--lr = 5e-5 \
+--epoch = 10 \
+--dataset_type_id = 0 \
 
 huggingface docx: \
 https://huggingface.co/docs/transformers/index
