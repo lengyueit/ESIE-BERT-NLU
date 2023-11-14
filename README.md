@@ -1,7 +1,7 @@
 ## code for paper "ESIE-BERT: Enriching Sub-words Information Explicitly with BERT for Intent Classification and Slot Filling"
 
 ```python
-python main.py
+python train.py
 ```
 
 Reasonably adjust the following parameters based on your own computational resources to control the model's computational load and parameter count. Here are some references: \
