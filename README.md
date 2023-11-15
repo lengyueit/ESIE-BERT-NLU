@@ -2,9 +2,9 @@
 
 ## Quick Start
 
-You can follow the steps below to quickly get up and running with our model. 
+Follow the steps below to set up and run our model quickly. 
 
-1. Download the pre-training model form transformers.
+1. Download the pre-training model from Transformers.
 
 2. Once the model/s you want have been downloaded, you can run the model locally using the command below:
 ```bash
@@ -20,7 +20,7 @@ python train.py \
 huggingface docx: \
 https://huggingface.co/docs/transformers/index
 
-pretrain model download url as following:
+pre-train model download URL as following:
 
 ### BERT
 
